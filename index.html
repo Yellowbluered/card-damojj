@@ -892,15 +892,29 @@
     openModal('modal-dividend');
   }
 
+  function findCard(id) {
+    for (var i = 0; i < state.cards.length; i++) if (state.cards[i].id === id) return state.cards[i];
+    return null;
+  }
+
+  function findDeposit(id) {
+    for (var i = 0; i < state.deposits.length; i++) if (state.deposits[i].id === id) return state.deposits[i];
+    return null;
+  }
+
   function deleteCard(id) {
-    var card = null;
-    for (var i = 0; i < state.cards.length; i++) if (state.cards[i].id === id) card = state.cards[i];
+    var card = findCard(id);
     if (!card) return;
-    askConfirm('剷除卡牌紀錄', '確定要刪除「' + card.name + '」？\n刪除後所有裝置都會同步移除，無法復原。', '確認剷除')
+    var myName = card.name;
+    askConfirm('剷除卡牌紀錄', '確定要刪除「' + myName + '」？\n刪除後所有裝置都會同步移除，無法復原。', '確認剷除')
       .then(function (ok) {
         if (!ok) return;
-        card.deleted = true;
-        card.updatedAt = Date.now();
+        // 確認視窗開住期間可能已經同步過，state 會被換成全新物件，
+        // 所以一定要重新用 id 攞返最新嗰一筆，唔可以靠之前嘅參考。
+        var cur = findCard(id);
+        if (!cur) { render(); return; }
+        cur.deleted = true;
+        cur.updatedAt = Date.now();
         delete imgCache[id];
         persist();
         render();
@@ -910,14 +924,16 @@
   }
 
   function deleteDeposit(id) {
-    var dep = null;
-    for (var i = 0; i < state.deposits.length; i++) if (state.deposits[i].id === id) dep = state.deposits[i];
+    var dep = findDeposit(id);
     if (!dep) return;
-    askConfirm('刪除入金紀錄', dep.member + ' • ' + dep.month + ' • ' + money(dep.amount) + '\n確定刪除？', '確認刪除')
+    var label = (dep.member || '') + ' • ' + (dep.month || '') + ' • ' + money(dep.amount);
+    askConfirm('刪除入金紀錄', label + '\n確定刪除？', '確認刪除')
       .then(function (ok) {
         if (!ok) return;
-        dep.deleted = true;
-        dep.updatedAt = Date.now();
+        var cur = findDeposit(id);
+        if (!cur) { render(); return; }
+        cur.deleted = true;
+        cur.updatedAt = Date.now();
         persist();
         render();
         toast('已刪除入金紀錄');

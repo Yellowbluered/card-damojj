@@ -209,7 +209,30 @@ async function main() {
     })()`);
     assert(Math.abs(divSum - 1350) < 1, `分紅合計 = ${divSum}（應等於盈虧 1350）`);
 
-    console.log('\n[7] 檢查兩個裝置有無 JavaScript 錯誤');
+    console.log('\n[7] 回歸測試：確認視窗開住期間發生同步，刪除仍然一次搞掂');
+    await A.activate();
+    const n0 = await A.eval('document.querySelectorAll("#deposit-rows tr").length');
+    await A.eval(`document.querySelector('#deposit-rows button[data-act="del-dep"]').click()`);
+    await sleep(300);
+    // 另一部機喺呢個時候新增資料，令 A 嘅 state 被整批換成新物件
+    await B.eval(`(function(){
+      document.querySelectorAll('input[name="dep-member"]').forEach(function(c,i){ c.checked = (i===0); });
+      document.getElementById('dep-amount').value = '777';
+      document.getElementById('form-deposit').requestSubmit();
+      return true;
+    })()`);
+    await sleep(5500);   // 等 A 輪詢完，state 已被替換
+    const during = await A.eval('document.querySelectorAll("#deposit-rows tr").length');
+    assert(during === n0 + 1, `確認視窗開住期間已同步到新紀錄（${n0} → ${during}）`);
+    await A.eval(`document.getElementById('confirm-ok').click()`);
+    await sleep(1500);
+    const n1 = await A.eval('document.querySelectorAll("#deposit-rows tr").length');
+    assert(n1 === n0, `撳一次就刪到，唔需要撳兩次（實際 ${n1}，應為 ${n0}）`);
+
+    await B.activate();
+    await waitFor(B, 'document.querySelectorAll("#deposit-rows tr").length', n0, '另一部機亦同步到刪除結果');
+
+    console.log('\n[8] 檢查兩個裝置有無 JavaScript 錯誤');
     const errs = [...A.errors, ...B.errors].filter((e) => !/favicon|tailwind|fonts\.googleapis|net::ERR/i.test(e));
     assert(errs.length === 0, '無 JavaScript 錯誤' + (errs.length ? ' → ' + errs.join(' | ') : ''));
 
