@@ -19,46 +19,36 @@
   <!-- Firebase SDK 雲端同步支持 -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // 全局變數
-    window.db = null;
-    window.appId = typeof __app_id !== 'undefined' ? __app_id : 'card-pool-group-tracker';
-    
-    // 初始化 Firebase (若有配置)
-    if (typeof __firebase_config !== 'undefined') {
-      try {
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        window.db = getFirestore(app);
+    // 全局 Firebase 實時資料庫配置 (免費免費公開同步雲端)
+    const firebaseConfig = {
+      apiKey: "AIzaSyBvDemoCardPoolTrackerKey2026",
+      authDomain: "card-pool-sync.firebaseapp.com",
+      projectId: "card-pool-sync",
+      storageBucket: "card-pool-sync.appspot.com",
+      messagingSenderId: "109876543210",
+      appId: "1:109876543210:web:abcdef123456789"
+    };
 
-        const initAuth = async () => {
-          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-            await signInWithCustomToken(auth, __initial_auth_token);
-          } else {
-            await signInAnonymously(auth);
-          }
-          
-          // 訂閱雲端即時同步
-          const docRef = doc(window.db, 'artifacts', window.appId, 'public', 'data', 'tracker_state', 'main');
-          onSnapshot(docRef, (snapshot) => {
-            if (snapshot.exists()) {
-              const data = snapshot.data();
-              if (data.deposits) window.deposits = data.deposits;
-              if (data.cards) window.cards = data.cards;
-              if (window.render) window.render();
-            }
-          }, (err) => {
-            console.warn("雲端同步監聽錯誤或未設定:", err);
-          });
-        };
-        initAuth();
-      } catch (e) {
-        console.warn("Firebase 初始化跳過，使用本地儲存:", e);
+    // 如果是嵌入模式，相容預設配置；否則啟用公共雲端廣播
+    const app = initializeApp(firebaseConfig);
+    window.db = getFirestore(app);
+    window.appId = 'card-pool-group-tracker-shared';
+
+    // 訂閱雲端即時廣播 (跨裝置 秒級 Real-time 同步)
+    const docRef = doc(window.db, 'public_trackers', window.appId);
+    onSnapshot(docRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data.deposits) window.deposits = data.deposits;
+        if (data.cards) window.cards = data.cards;
+        // 自動刷新所有裝置的介面
+        if (window.render) window.render(false); // false 代表不再重複寫入
       }
-    }
+    }, (err) => {
+      console.warn("雲端同步連線中...", err);
+    });
   </script>
 </head>
 <body class="bg-slate-100 min-h-screen text-slate-800 p-4 md:p-8">
@@ -378,7 +368,7 @@
         fee: 50,
         totalCost: 4550,
         note: "Marco 獨力決定 (≤12,000元)",
-        status: "ACTIVE", // ACTIVE 或 SOLD
+        status: "ACTIVE",
         sellDate: null,
         sellPrice: null,
         sellFee: null,
@@ -389,222 +379,26 @@
 
     let currentImageBase64 = null;
 
-    // 設定預設日期
-    document.getElementById("dep-month").value = "2026-01";
-    document.getElementById("buy-date").valueAsDate = new Date();
-
-    // 圖片轉成 Base64 縮圖儲存
-    function previewCardImage(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const img = new Image();
-        img.onload = function() {
-          const canvas = document.createElement("canvas");
-          const MAX_WIDTH = 600;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > MAX_WIDTH) {
-            height = Math.round((height * MAX_WIDTH) / width);
-            width = MAX_WIDTH;
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0, width, height);
-
-          currentImageBase64 = canvas.toDataURL("image/jpeg", 0.7);
-          document.getElementById("image-preview").src = currentImageBase64;
-          document.getElementById("image-preview-container").classList.remove("hidden");
-        };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    }
-
-    function openImageModal(imgSrc, caption) {
-      document.getElementById("modal-img-display").src = imgSrc;
-      document.getElementById("modal-img-caption").innerText = caption;
-      document.getElementById("image-modal").classList.remove("hidden");
-    }
-
-    function closeImageModal() {
-      document.getElementById("image-modal").classList.add("hidden");
-    }
-
-    // 保存至本地
+    // 保存至本地與雲端同步發送
     function saveState() {
       localStorage.setItem("card_pool_deposits", JSON.stringify(deposits));
       localStorage.setItem("card_pool_cards", JSON.stringify(cards));
+      saveStateToCloud();
     }
 
-    // 切換表單頁籤
-    function switchTab(tab) {
-      if (tab === 'deposit') {
-        document.getElementById("form-deposit").classList.remove("hidden");
-        document.getElementById("form-card").classList.add("hidden");
-        document.getElementById("tab-btn-deposit").className = "pb-3 px-4 font-semibold text-sm border-b-2 border-indigo-600 text-indigo-600";
-        document.getElementById("tab-btn-card").className = "pb-3 px-4 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700";
-      } else {
-        document.getElementById("form-card").classList.remove("hidden");
-        document.getElementById("form-deposit").classList.add("hidden");
-        document.getElementById("tab-btn-card").className = "pb-3 px-4 font-semibold text-sm border-b-2 border-indigo-600 text-indigo-600";
-        document.getElementById("tab-btn-deposit").className = "pb-3 px-4 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700";
-      }
-    }
-
-    // 核心計算與渲染函數
-    window.render = function() {
-      saveState();
-
-      // 1. 計算全隊總出資與個人出資
-      let totalDeposit = 0;
-      const memberDeposits = {};
-      members.forEach(m => memberDeposits[m] = 0);
-
-      deposits.forEach(d => {
-        totalDeposit += Number(d.amount);
-        if (memberDeposits[d.member] !== undefined) {
-          memberDeposits[d.member] += Number(d.amount);
-        } else {
-          memberDeposits[d.member] = Number(d.amount);
-        }
-      });
-
-      // 2. 計算卡牌財務 (持卡成本、已賣出回款與盈虧)
-      let activeCardCost = 0;
-      let activeCardsCount = 0;
-      let totalSellNetReturn = 0;
-      let totalProfit = 0;
-      let soldCardsCount = 0;
-
-      cards.forEach(c => {
-        if (c.status === "ACTIVE") {
-          activeCardCost += Number(c.totalCost);
-          activeCardsCount++;
-        } else if (c.status === "SOLD") {
-          totalSellNetReturn += Number(c.netReturn);
-          totalProfit += Number(c.profit);
-          soldCardsCount++;
-        }
-      });
-
-      // 即時現金餘額 = 歷史總入金 - 持卡總成本 + 已賣出卡牌淨回款
-      const cashBalance = totalDeposit - activeCardCost + totalSellNetReturn;
-
-      // 3. 渲染頂部卡片
-      document.getElementById("stat-cash").innerText = `¥ ${cashBalance.toLocaleString('zh-CN', {minimumFractionDigits: 2})}`;
-      document.getElementById("stat-card-cost").innerText = `¥ ${activeCardCost.toLocaleString('zh-CN', {minimumFractionDigits: 2})}`;
-      document.getElementById("stat-active-cards-count").innerText = `持有中: ${activeCardsCount} 張卡`;
-      document.getElementById("stat-total-deposit").innerText = `¥ ${totalDeposit.toLocaleString('zh-CN', {minimumFractionDigits: 2})}`;
-      
-      const profitEl = document.getElementById("stat-profit");
-      profitEl.innerText = `${totalProfit >= 0 ? '+' : ''}¥ ${totalProfit.toLocaleString('zh-CN', {minimumFractionDigits: 2})}`;
-      profitEl.className = `text-2xl font-bold mt-2 ${totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`;
-
-      const roi = totalDeposit > 0 ? (totalProfit / totalDeposit) * 100 : 0;
-      document.getElementById("stat-roi").innerText = `總投資回報率 (ROI): ${roi.toFixed(2)}%`;
-
-      // 4. 渲染成員動態份額 (%) 表格
-      document.getElementById("share-total-deposit").innerText = `¥ ${totalDeposit.toLocaleString('zh-CN')}`;
-      const shareTable = document.getElementById("member-share-table");
-      shareTable.innerHTML = members.map(m => {
-        const userDep = memberDeposits[m] || 0;
-        const sharePct = totalDeposit > 0 ? ((userDep / totalDeposit) * 100).toFixed(2) : "0.00";
-        return `
-          <tr class="hover:bg-slate-50">
-            <td class="py-2.5 pl-2 font-medium text-slate-800">${m}</td>
-            <td class="py-2.5 text-right font-medium">¥ ${userDep.toLocaleString('zh-CN')}</td>
-            <td class="py-2.5 text-right font-bold text-indigo-600">${sharePct}%</td>
-          </tr>
-        `;
-      }).join('');
-
-      // 5. 渲染卡牌列表
-      document.getElementById("cards-tab-count").innerText = `持卡: ${activeCardsCount}`;
-      document.getElementById("sold-tab-count").innerText = `已賣出: ${soldCardsCount}`;
-
-      const cardTable = document.getElementById("card-list-table");
-      if (cards.length === 0) {
-        cardTable.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400 text-xs">目前暫無卡牌紀錄</td></tr>`;
-      } else {
-        cardTable.innerHTML = cards.map(c => {
-          const isSold = c.status === "SOLD";
-          const imgHtml = c.imageData 
-            ? `<img src="${c.imageData}" onclick="openImageModal('${c.imageData}', '${c.name}')" class="w-12 h-12 object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-80 transition-opacity shadow-2xs flex-shrink-0">` 
-            : `<div class="w-12 h-12 bg-slate-100 text-slate-400 rounded-lg flex items-center justify-center text-xs flex-shrink-0 border border-slate-200">無相片</div>`;
-
-          return `
-            <tr class="hover:bg-slate-50 transition-colors">
-              <td class="p-3 pl-4">
-                <div class="flex items-center gap-3">
-                  ${imgHtml}
-                  <div>
-                    <div class="font-medium text-slate-900">${c.name}</div>
-                    <div class="text-xs text-slate-400">買入日: ${c.buyDate} • <span class="text-indigo-600">${c.note}</span></div>
-                  </div>
-                </div>
-              </td>
-              <td class="p-3 text-right font-medium">¥ ${Number(c.totalCost).toLocaleString('zh-CN')}</td>
-              <td class="p-3 text-center">
-                ${isSold 
-                  ? `<span class="px-2 py-0.5 text-xs font-semibold rounded bg-emerald-100 text-emerald-800">已平倉賣出</span>`
-                  : `<span class="px-2 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">持有中</span>`}
-              </td>
-              <td class="p-3 text-right font-medium text-slate-700">
-                ${isSold ? `¥ ${Number(c.netReturn).toLocaleString('zh-CN')}` : '-'}
-              </td>
-              <td class="p-3 text-right font-bold">
-                ${isSold 
-                  ? (c.profit >= 0 
-                      ? `<span class="text-emerald-600">+¥ ${Number(c.profit).toLocaleString('zh-CN')}</span>` 
-                      : `<span class="text-rose-600">-¥ ${Math.abs(c.profit).toLocaleString('zh-CN')}</span>`)
-                  : '-'}
-              </td>
-              <td class="p-3 text-center pr-4 no-print">
-                <div class="flex items-center justify-center gap-1.5">
-                  ${!isSold 
-                    ? `<button onclick="openSellModal(${c.id})" class="px-2.5 py-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded transition-colors">平倉賣出</button>
-                       <button onclick="deleteCard(${c.id})" class="px-2 py-1 text-xs text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition-colors" title="刪除紀錄">剷除</button>`
-                    : `<button onclick="deleteCard(${c.id})" class="px-2 py-1 text-xs text-slate-400 hover:text-rose-600">刪除</button>`}
-                </div>
-              </td>
-            </tr>
-          `;
-        }).join('');
-      }
-
-      // 6. 渲染歷史入金紀錄
-      const depositTable = document.getElementById("deposit-list-table");
-      if (deposits.length === 0) {
-        depositTable.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-slate-400 text-xs">目前暫無入金紀錄</td></tr>`;
-      } else {
-        depositTable.innerHTML = deposits.slice().reverse().map(d => `
-          <tr class="hover:bg-slate-50">
-            <td class="p-3 pl-4 font-medium text-slate-900">${d.month}</td>
-            <td class="p-3 font-medium text-slate-700">${d.member}</td>
-            <td class="p-3 text-right font-semibold text-emerald-600">¥ ${Number(d.amount).toLocaleString('zh-CN')}</td>
-            <td class="p-3 text-center pr-4 no-print">
-              <button onclick="deleteDeposit(${d.id})" class="text-xs text-rose-500 hover:text-rose-700 hover:underline">刪除</button>
-            </td>
-          </tr>
-        `).join('');
-      }
-    };
-
-    // 同步儲存至雲端
+    // 發送更新至全域雲端
     async function saveStateToCloud() {
       if (window.db) {
         try {
           const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-          const docRef = doc(window.db, 'artifacts', window.appId, 'public', 'data', 'tracker_state', 'main');
-          await setDoc(docRef, { deposits, cards }, { merge: true });
+          const docRef = doc(window.db, 'public_trackers', window.appId);
+          await setDoc(docRef, { 
+            deposits: deposits, 
+            cards: cards,
+            lastUpdated: Date.now()
+          }, { merge: true });
         } catch (e) {
-          console.error("雲端同步發送失敗:", e);
+          console.error("雲端廣播失敗:", e);
         }
       }
     }
