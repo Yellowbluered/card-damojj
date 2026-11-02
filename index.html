@@ -16,9 +16,9 @@
   input[type=number]{-moz-appearance:textfield}
 </style>
 </head>
-<body class="bg-slate-100 min-h-screen text-slate-800 pb-10">
+<body class="bg-slate-100 min-h-screen text-slate-800 p-4 md:p-8">
 
-<div class="max-w-7xl mx-auto px-3 sm:px-6 pt-4 space-y-4">
+<div class="max-w-7xl mx-auto space-y-6">
 
   <!-- 未連接雲端提示 -->
   <div id="banner" class="hidden no-print bg-amber-50 border border-amber-200 text-amber-900 text-sm rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -27,20 +27,22 @@
   </div>
 
   <!-- 頁頭 -->
-  <header class="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+  <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
     <div>
-      <h1 class="text-xl sm:text-2xl font-bold text-slate-900">🎴 合夥買卡資金池與交易動態管理系統</h1>
-      <p class="text-sm text-slate-500 mt-1">自動計算動態份額 (%) • 跨裝置即時同步 • 買賣卡明細 • 匯出 Excel</p>
+      <h1 class="text-2xl font-bold text-slate-900">🎴 合夥買卡資金池與交易動態管理系統</h1>
+      <p class="text-sm text-slate-500 mt-1">自動計算動態份額 (%) • 雲端即時同步 • 買賣卡明細 • 匯出 Excel</p>
       <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
-        <span id="sync-pill" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border font-medium">本機模式</span>
+        <button id="sync-pill" title="撳一下開啟同步設定" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border font-medium cursor-pointer">本機模式</button>
         <span id="sync-detail" class="text-slate-400"></span>
       </div>
     </div>
-    <div class="flex flex-wrap gap-2 no-print">
-      <button id="btn-sync" class="flex items-center gap-2 bg-slate-700 hover:bg-slate-800 text-white font-medium px-3 py-2 rounded-lg text-sm">🔄 立即同步</button>
-      <button id="btn-export" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-3 py-2 rounded-lg text-sm">📊 匯出 CSV</button>
-      <button id="btn-print" class="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-3 py-2 rounded-lg text-sm">🖨️ 列印</button>
-      <button id="btn-settings" class="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-3 py-2 rounded-lg text-sm">⚙️</button>
+    <div class="flex gap-2 no-print">
+      <button id="btn-export" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors shadow-sm">
+        <span>📊</span> 匯出 Excel (CSV)
+      </button>
+      <button id="btn-print" class="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-4 py-2 rounded-lg text-sm transition-colors">
+        <span>🖨️</span> 列印/PDF
+      </button>
     </div>
   </header>
 
@@ -49,7 +51,7 @@
     <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
       <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">即時池內現金餘額</div>
       <div id="stat-cash" class="num text-2xl font-bold text-emerald-600 mt-2">¥ 0.00</div>
-      <div class="text-xs text-slate-400 mt-1">入金 − 買卡 + 賣出回款</div>
+      <div class="text-xs text-slate-400 mt-1">上限 ¥100,000 (可隨時調整)</div>
     </div>
     <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
       <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">持卡總成本</div>
@@ -57,160 +59,188 @@
       <div id="stat-active-cards" class="text-xs text-slate-400 mt-1">持有中: 0 張卡</div>
     </div>
     <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-      <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">已實現總盈虧</div>
+      <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">已實現總盈虧 (已賣出)</div>
       <div id="stat-profit" class="num text-2xl font-bold text-slate-900 mt-2">¥ 0.00</div>
-      <div id="stat-roi" class="text-xs text-slate-400 mt-1">ROI: 0.00%</div>
+      <div id="stat-roi" class="text-xs text-slate-400 mt-1">總投資回報率 (ROI): 0.00%</div>
     </div>
     <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
       <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">歷史累計總入金</div>
       <div id="stat-deposit" class="num text-2xl font-bold text-slate-800 mt-2">¥ 0.00</div>
-      <div id="stat-members" class="text-xs text-slate-400 mt-1">成員 6 人</div>
+      <div id="stat-members" class="text-xs text-slate-400 mt-1">成員固定 6 人 (每月1號繳費)</div>
     </div>
   </div>
 
   <!-- 份額 + 表單 -->
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
 
-    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-      <div class="flex justify-between items-center mb-3">
-        <h2 class="text-base font-bold text-slate-900">👥 成員即時動態份額</h2>
-        <span class="text-xs text-slate-400">即時計算</span>
+    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+      <div>
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <span>👥</span> 成員即時動態份額 (%)
+          </h2>
+          <span class="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-medium shrink-0 whitespace-nowrap">即時動態計算中</span>
+        </div>
+
+        <p class="text-xs text-slate-500 mb-4 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+          <strong>公式：</strong> 個人歷史累計入資 ÷ 全隊歷史累計總入資 × 100%<br>
+          所有卡牌賣出分紅與清算嚴格按此百分比劃分。
+        </p>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm text-left">
+            <thead class="text-xs text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
+              <tr>
+                <th class="pb-2 pt-2 pl-2">成員名稱</th>
+                <th class="pb-2 pt-2 text-right">累計出資</th>
+                <th class="pb-2 pt-2 text-right">權益份額 (%)</th>
+              </tr>
+            </thead>
+            <tbody id="share-rows" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
       </div>
-      <div class="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg p-2.5 leading-relaxed mb-3">
-        份額 = 個人歷史累計入資 ÷ 全隊歷史累計總入資 × 100%
+
+      <div class="mt-6 pt-4 border-t border-slate-100">
+        <div class="text-xs text-slate-400 flex justify-between">
+          <span>全隊總出資額</span>
+          <span id="share-total" class="font-bold text-slate-700">¥ 0</span>
+        </div>
       </div>
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="text-xs text-slate-400 border-b border-slate-100">
-            <th class="text-left font-semibold py-2">成員</th>
-            <th class="text-right font-semibold py-2">累計出資</th>
-            <th class="text-right font-semibold py-2">份額</th>
-          </tr>
-        </thead>
-        <tbody id="share-rows"></tbody>
-        <tfoot>
-          <tr class="border-t-2 border-slate-100">
-            <td class="py-2.5 font-bold text-slate-700">合計</td>
-            <td id="share-total" class="py-2.5 text-right font-bold num">¥ 0</td>
-            <td class="py-2.5 text-right font-bold text-indigo-600">100%</td>
-          </tr>
-        </tfoot>
-      </table>
     </div>
 
-    <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <div class="flex border-b border-slate-100 no-print">
-        <button id="tab-deposit" class="flex-1 py-3.5 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600">➕ 登記每月入金</button>
-        <button id="tab-card" class="flex-1 py-3.5 text-sm font-semibold border-b-2 border-transparent text-slate-500">🎴 登記買入新卡</button>
+    <div class="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+      <div class="flex border-b border-slate-200 mb-6 no-print">
+        <button id="tab-deposit" class="pb-3 px-4 font-semibold text-sm border-b-2 border-indigo-600 text-indigo-600">
+          ➕ 登記成員月度入金 (每月1號)
+        </button>
+        <button id="tab-card" class="pb-3 px-4 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700">
+          🎴 登記買入新卡 (建倉)
+        </button>
       </div>
 
       <!-- 入金表單 -->
-      <form id="form-deposit" class="p-5 space-y-4">
+      <form id="form-deposit" class="space-y-4">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">繳費月份</label>
-            <input type="month" id="dep-month" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+            <label class="block text-xs font-semibold text-slate-600 mb-1">選擇月份 (每月1號固定入金)</label>
+            <input type="month" id="dep-month" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">每人出資 (RMB)</label>
-            <input type="number" step="0.01" id="dep-amount" value="1000" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+            <label class="block text-xs font-semibold text-slate-600 mb-1">每名成員固定出資 (RMB)</label>
+            <input type="number" id="dep-amount" value="1000" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
           </div>
         </div>
+
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-2">已成功轉帳嘅成員</label>
-          <div id="dep-members" class="grid grid-cols-2 sm:grid-cols-3 gap-2"></div>
+          <label class="block text-xs font-semibold text-slate-600 mb-2">勾選本期已成功轉帳繳費之成員：</label>
+          <div id="dep-members" class="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-lg border border-slate-200"></div>
         </div>
-        <div class="flex gap-2 pt-1">
-          <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg text-sm">確認提交入金紀錄</button>
-        </div>
+
+        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors shadow-sm">
+          確認提交當月入金紀錄
+        </button>
       </form>
 
       <!-- 買卡表單 -->
-      <form id="form-card" class="p-5 space-y-4 hidden">
+      <form id="form-card" class="space-y-4 hidden">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label class="block text-xs font-semibold text-slate-600 mb-1">購買日期</label>
-            <input type="date" id="buy-date" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+            <input type="date" id="buy-date" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">成交金額 (RMB)</label>
-            <input type="number" step="0.01" id="buy-price" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+            <label class="block text-xs font-semibold text-slate-600 mb-1">球員姓名與卡牌詳情 (卡種/編號)</label>
+            <input type="text" id="buy-name" placeholder="例: 2023 Chrome Bellingham Auto /49" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
           </div>
         </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">球員姓名與卡牌詳情（卡種／編號）</label>
-          <input type="text" id="buy-name" required placeholder="例：2023 Prizm Wembanyama RC /99" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
-        </div>
+
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">相關費用（運費／手續費）</label>
-            <input type="number" step="0.01" id="buy-fee" value="0" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+            <label class="block text-xs font-semibold text-slate-600 mb-1">成交金額 (RMB)</label>
+            <input type="number" step="0.01" id="buy-price" placeholder="0.00" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">決策授權記錄</label>
-            <select id="buy-note" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
-              <option>Marco 獨力決定 (≤12,000元)</option>
-              <option>常規投票過半數 (12,001~20,000元)</option>
-              <option>常規投票極大多數 (&gt;20,000元)</option>
-              <option>緊急採購特別條款 (≥3人同意)</option>
-            </select>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">相關費用 (運費/平台手續費 RMB)</label>
+            <input type="number" step="0.01" id="buy-fee" value="0" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
           </div>
         </div>
+
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">卡牌相片（可選）</label>
-          <input type="file" id="buy-image" accept="image/*" class="w-full text-xs border border-slate-300 rounded-lg p-2 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700">
-          <div id="preview-box" class="hidden mt-2">
-            <img id="preview-img" class="h-24 rounded-lg border border-slate-200 object-cover" alt="預覽">
+          <label class="block text-xs font-semibold text-slate-600 mb-1">📷 上載卡牌相片 / 拍照</label>
+          <input type="file" id="buy-image" accept="image/*" class="w-full border border-slate-300 rounded-lg p-2 text-sm text-slate-500 bg-white cursor-pointer file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+          <div id="preview-box" class="mt-2 hidden">
+            <img id="preview-img" class="w-24 h-24 object-cover rounded-lg border border-slate-200 shadow-sm" alt="卡牌預覽">
           </div>
         </div>
-        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg text-sm">確認扣除資金池並買入</button>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">決策授權類別</label>
+          <select id="buy-note" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <option value="Marco 獨力決定 (≤12,000元)">Marco 獨力決定 (≤12,000元)</option>
+            <option value="常規投票過半數同意 (12,001~20,000元)">常規投票過半數同意 (12,001~20,000元)</option>
+            <option value="常規投票極大多數同意 (>20,000元)">常規投票極大多數同意 (>20,000元)</option>
+            <option value="緊急採購特別條款 (>12,000元 限時≥3人同意)">緊急採購特別條款 (>12,000元 限時≥3人同意)</option>
+          </select>
+        </div>
+
+        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors shadow-sm">
+          確認扣除資金池現金並買入卡牌
+        </button>
       </form>
     </div>
   </div>
 
   <!-- 卡牌明細 -->
   <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-    <div class="p-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
-      <h2 class="text-base font-bold text-slate-900">📦 卡牌資產明細</h2>
-      <div class="flex gap-2 text-xs">
-        <span id="cards-count" class="px-2 py-1 rounded-full bg-blue-50 text-blue-700 font-semibold">持卡: 0</span>
-        <span id="sold-count" class="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 font-semibold">已賣出: 0</span>
+    <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <span>📦</span> 卡牌資產明細與平倉賣出紀錄
+        </h2>
+      </div>
+      <div class="flex gap-2 text-xs font-medium">
+        <span id="cards-count" class="px-3 py-1 bg-blue-50 text-blue-700 rounded-md">持卡: 0</span>
+        <span id="sold-count" class="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-md">已賣出: 0</span>
       </div>
     </div>
+
     <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead class="bg-slate-50 text-xs text-slate-500">
+      <table class="w-full text-sm text-left">
+        <thead class="text-xs text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
           <tr>
-            <th class="text-left font-semibold p-3 pl-4">卡牌 / 買入日</th>
-            <th class="text-right font-semibold p-3">總成本</th>
-            <th class="text-center font-semibold p-3">狀態</th>
-            <th class="text-right font-semibold p-3">賣出淨回款</th>
-            <th class="text-right font-semibold p-3">盈虧</th>
-            <th class="text-center font-semibold p-3 pr-4 no-print">操作</th>
+            <th class="p-3 pl-4">卡牌相片與名稱 / 買入日</th>
+            <th class="p-3 text-right">總成本 (含費)</th>
+            <th class="p-3 text-center">狀態</th>
+            <th class="p-3 text-right">賣出淨回款</th>
+            <th class="p-3 text-right">單卡盈虧</th>
+            <th class="p-3 text-center pr-4 no-print">操作</th>
           </tr>
         </thead>
-        <tbody id="card-rows" class="divide-y divide-slate-50"></tbody>
+        <tbody id="card-rows" class="divide-y divide-slate-100"></tbody>
       </table>
     </div>
   </div>
 
   <!-- 入金流水 -->
   <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-    <div class="p-4 border-b border-slate-100 flex items-center justify-between">
-      <h2 class="text-base font-bold text-slate-900">🧾 歷史入金紀錄</h2>
+    <div class="p-6 border-b border-slate-100 flex items-center justify-between">
+      <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+        <span>🧾</span> 歷史入金紀錄流水賬
+      </h2>
       <span id="deposit-count" class="text-xs text-slate-400"></span>
     </div>
-    <div class="overflow-x-auto max-h-96 overflow-y-auto">
-      <table class="w-full text-sm">
-        <thead class="bg-slate-50 text-xs text-slate-500 sticky top-0">
+    <div class="overflow-x-auto max-h-64 overflow-y-auto">
+      <table class="w-full text-sm text-left">
+        <thead class="text-xs text-slate-400 uppercase bg-slate-50 border-b border-slate-100 sticky top-0">
           <tr>
-            <th class="text-left font-semibold p-3 pl-4">月份</th>
-            <th class="text-left font-semibold p-3">成員</th>
-            <th class="text-right font-semibold p-3">金額</th>
-            <th class="text-center font-semibold p-3 pr-4 no-print">操作</th>
+            <th class="p-3 pl-4">月份</th>
+            <th class="p-3">繳費成員</th>
+            <th class="p-3 text-right">個人出資</th>
+            <th class="p-3 text-center pr-4 no-print">管理</th>
           </tr>
         </thead>
-        <tbody id="deposit-rows" class="divide-y divide-slate-50"></tbody>
+        <tbody id="deposit-rows" class="divide-y divide-slate-100"></tbody>
       </table>
     </div>
   </div>
@@ -224,27 +254,27 @@
 <div id="modal-sell" class="hidden fixed inset-0 z-40 bg-slate-900/60 p-4 items-center justify-center">
   <div class="bg-white w-full max-w-md rounded-xl shadow-2xl p-5 space-y-4">
     <div class="flex justify-between items-start">
-      <h3 class="text-lg font-bold text-slate-900">🎴 平倉賣出</h3>
+      <h3 class="text-lg font-bold text-slate-900">🎴 執行卡牌平倉賣出</h3>
       <button data-close="modal-sell" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
     </div>
-    <p id="sell-card-name" class="text-sm text-slate-600 bg-slate-50 rounded-lg p-2.5"></p>
-    <form id="form-sell" class="space-y-3">
+    <p id="sell-card-name" class="text-xs text-slate-500 font-medium bg-slate-50 rounded-lg p-2.5"></p>
+    <form id="form-sell" class="space-y-4">
       <input type="hidden" id="sell-id">
       <div>
-        <label class="block text-xs font-semibold text-slate-600 mb-1">賣出日期</label>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">賣出成交日期</label>
         <input type="date" id="sell-date" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
       </div>
       <div>
-        <label class="block text-xs font-semibold text-slate-600 mb-1">成交總價 (RMB)</label>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">賣出成交總價 (RMB)</label>
         <input type="number" step="0.01" id="sell-price" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
       </div>
       <div>
-        <label class="block text-xs font-semibold text-slate-600 mb-1">平台手續費 / 運費 (RMB)</label>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">扣除平台手續費/運費 (RMB)</label>
         <input type="number" step="0.01" id="sell-fee" value="0" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
       </div>
-      <div class="flex gap-2 pt-1">
-        <button type="button" data-close="modal-sell" class="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 rounded-lg text-sm">取消</button>
-        <button type="submit" class="w-1/2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-lg text-sm">確認賣出</button>
+      <div class="flex gap-2 pt-2">
+        <button type="button" data-close="modal-sell" class="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-sm">取消</button>
+        <button type="submit" class="w-1/2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 rounded-lg text-sm">確認賣出並入帳</button>
       </div>
     </form>
   </div>
@@ -292,6 +322,7 @@
       <button id="cfg-save" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg text-sm">儲存並連接</button>
       <button id="cfg-test" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium py-2.5 rounded-lg text-sm">測試連線</button>
     </div>
+    <button id="btn-sync" class="w-full bg-slate-700 hover:bg-slate-800 text-white font-medium py-2.5 rounded-lg text-sm">🔄 立即同步</button>
     <div class="border-t border-slate-100 pt-3 space-y-2">
       <button id="cfg-backup" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 rounded-lg text-sm">💾 下載完整備份 (JSON)</button>
       <button id="cfg-clear" class="w-full bg-rose-50 hover:bg-rose-100 text-rose-700 font-medium py-2.5 rounded-lg text-sm">🗑️ 清除本機資料（不影響雲端）</button>
@@ -478,7 +509,7 @@
   function paintStatus() {
     var pill = $('sync-pill'), detail = $('sync-detail');
     if (!pill) return;
-    var cls = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border font-medium ';
+    var cls = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border font-medium cursor-pointer ';
     var txt = '本機模式';
 
     if (!cfg.url) {
@@ -617,17 +648,17 @@
     $('stat-active-cards').textContent = '持有中: ' + d.activeCount + ' 張卡';
     $('stat-profit').textContent = (d.profit >= 0 ? '+' : '') + money(d.profit);
     $('stat-profit').className = 'num text-2xl font-bold mt-2 ' + (d.profit >= 0 ? 'text-emerald-600' : 'text-rose-600');
-    $('stat-roi').textContent = 'ROI: ' + d.roi.toFixed(2) + '%';
+    $('stat-roi').textContent = '總投資回報率 (ROI): ' + d.roi.toFixed(2) + '%';
     $('stat-deposit').textContent = money(d.totalDeposit);
-    $('stat-members').textContent = '成員 ' + d.members.length + ' 人 • 每月 1 號繳費';
+    $('stat-members').textContent = '成員固定 ' + d.members.length + ' 人 (每月1號繳費)';
 
     var rows = d.members.map(function (m) {
       var amt = d.byMember[m] || 0;
       var pct = d.totalDeposit > 0 ? (amt / d.totalDeposit) * 100 : 0;
       return '<tr class="hover:bg-slate-50">' +
-        '<td class="py-2.5 text-slate-800 font-medium">' + esc(m) + '</td>' +
-        '<td class="py-2.5 text-right num text-slate-600">' + money0(amt) + '</td>' +
-        '<td class="py-2.5 text-right num font-bold text-indigo-600">' + pct.toFixed(2) + '%</td>' +
+        '<td class="py-2.5 pl-2 font-medium text-slate-800">' + esc(m) + '</td>' +
+        '<td class="py-2.5 text-right font-medium num">' + money0(amt) + '</td>' +
+        '<td class="py-2.5 text-right font-bold text-indigo-600">' + pct.toFixed(2) + '%</td>' +
         '</tr>';
     }).join('');
     $('share-rows').innerHTML = rows || '<tr><td colspan="3" class="py-6 text-center text-slate-400 text-xs">尚未有入金</td></tr>';
@@ -648,23 +679,23 @@
           ? '<img src="' + esc(src) + '" data-act="img" data-id="' + esc(c.id) + '" class="w-12 h-12 object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-80 shrink-0" alt="">'
           : '<div class="w-12 h-12 bg-slate-100 text-slate-300 rounded-lg flex items-center justify-center text-[10px] shrink-0 border border-slate-200">無相片</div>';
         var statusBadge = isSold
-          ? '<span class="px-2 py-0.5 text-xs font-semibold rounded bg-emerald-100 text-emerald-800">已賣出</span>'
+          ? '<span class="px-2 py-0.5 text-xs font-semibold rounded bg-emerald-100 text-emerald-800">已平倉賣出</span>'
           : '<span class="px-2 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">持有中</span>';
         var profitHtml = isSold
           ? '<span class="' + (num(c.profit) >= 0 ? 'text-emerald-600' : 'text-rose-600') + '">' + (num(c.profit) >= 0 ? '+' : '') + money(c.profit) + '</span>'
-          : '<span class="text-slate-300">—</span>';
+          : '<span class="text-slate-300">-</span>';
         var actions = isSold
-          ? '<button data-act="dividend" data-id="' + esc(c.id) + '" class="px-2.5 py-1 text-xs bg-amber-500 hover:bg-amber-600 text-white font-medium rounded">分紅</button>' +
-            '<button data-act="del-card" data-id="' + esc(c.id) + '" class="px-2.5 py-1 text-xs text-rose-600 border border-rose-200 hover:bg-rose-50 font-medium rounded">剷除</button>'
-          : '<button data-act="sell" data-id="' + esc(c.id) + '" class="px-2.5 py-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded">平倉賣出</button>' +
-            '<button data-act="del-card" data-id="' + esc(c.id) + '" class="px-2.5 py-1 text-xs text-rose-600 border border-rose-200 hover:bg-rose-50 font-medium rounded">剷除</button>';
+          ? '<button data-act="dividend" data-id="' + esc(c.id) + '" class="px-2.5 py-1 text-xs bg-amber-500 hover:bg-amber-600 text-white font-medium rounded transition-colors">分紅</button>' +
+            '<button data-act="del-card" data-id="' + esc(c.id) + '" class="px-2 py-1 text-xs text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition-colors" title="刪除紀錄">剷除</button>'
+          : '<button data-act="sell" data-id="' + esc(c.id) + '" class="px-2.5 py-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded transition-colors">平倉賣出</button>' +
+            '<button data-act="del-card" data-id="' + esc(c.id) + '" class="px-2 py-1 text-xs text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition-colors" title="刪除紀錄">剷除</button>';
 
-        return '<tr class="hover:bg-slate-50" data-row="' + esc(c.id) + '">' +
+        return '<tr class="hover:bg-slate-50 transition-colors" data-row="' + esc(c.id) + '">' +
           '<td class="p-3 pl-4"><div class="flex items-center gap-3">' + thumb +
             '<div class="min-w-0"><div class="font-medium text-slate-900 break-words">' + esc(c.name) + '</div>' +
-            '<div class="text-[11px] text-slate-400 mt-0.5">買入: ' + esc(c.buyDate) + ' • ' + esc(c.note || '') + '</div></div>' +
+            '<div class="text-xs text-slate-400 mt-0.5">買入日: ' + esc(c.buyDate) + ' • <span class="text-indigo-600">' + esc(c.note || '') + '</span></div></div>' +
           '</div></td>' +
-          '<td class="p-3 text-right num font-medium text-slate-700">' + money(c.totalCost) + '</td>' +
+          '<td class="p-3 text-right font-medium num">' + money(c.totalCost) + '</td>' +
           '<td class="p-3 text-center">' + statusBadge + '</td>' +
           '<td class="p-3 text-right num text-slate-600">' + (isSold ? money(c.netReturn) : '—') + '</td>' +
           '<td class="p-3 text-right num font-bold">' + profitHtml + '</td>' +
@@ -681,7 +712,7 @@
       var ds = d.deposits.slice().sort(function (a, b) { return String(b.month || '').localeCompare(String(a.month || '')); });
       dbody.innerHTML = ds.map(function (x) {
         return '<tr class="hover:bg-slate-50">' +
-          '<td class="p-3 pl-4 font-medium text-slate-900">' + esc(x.month) + '</td>' +
+          '<td class="p-3 pl-4 font-medium text-slate-900">' + esc(String(x.month || '').indexOf('號') >= 0 ? x.month : x.month + ' (1號)') + '</td>' +
           '<td class="p-3 text-slate-700">' + esc(x.member) + '</td>' +
           '<td class="p-3 text-right num font-semibold text-emerald-600">' + money(x.amount) + '</td>' +
           '<td class="p-3 pr-4 text-center no-print"><button data-act="del-dep" data-id="' + esc(x.id) + '" class="text-xs text-rose-500 hover:text-rose-700 hover:underline">刪除</button></td>' +
@@ -1020,9 +1051,9 @@
     $('buy-date').value = localDate();
 
     $('dep-members').innerHTML = BASE_MEMBERS.map(function (m) {
-      return '<label class="flex items-center gap-2 text-sm border border-slate-200 rounded-lg px-3 py-2 hover:bg-slate-50 cursor-pointer">' +
-        '<input type="checkbox" name="dep-member" value="' + esc(m) + '" checked class="rounded text-indigo-600 focus:ring-indigo-500">' +
-        '<span>' + esc(m) + '</span></label>';
+      return '<label class="flex items-center gap-2 cursor-pointer text-sm font-medium">' +
+        '<input type="checkbox" name="dep-member" value="' + esc(m) + '" checked class="w-4 h-4 text-indigo-600 rounded"> ' + esc(m) +
+        '</label>';
     }).join('');
 
     $('cfg-device').textContent = cfg.clientId;
@@ -1038,14 +1069,14 @@
     $('tab-deposit').addEventListener('click', function () {
       $('form-deposit').classList.remove('hidden');
       $('form-card').classList.add('hidden');
-      $('tab-deposit').className = 'flex-1 py-3.5 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600';
-      $('tab-card').className = 'flex-1 py-3.5 text-sm font-semibold border-b-2 border-transparent text-slate-500';
+      $('tab-deposit').className = 'pb-3 px-4 font-semibold text-sm border-b-2 border-indigo-600 text-indigo-600';
+      $('tab-card').className = 'pb-3 px-4 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700';
     });
     $('tab-card').addEventListener('click', function () {
       $('form-card').classList.remove('hidden');
       $('form-deposit').classList.add('hidden');
-      $('tab-card').className = 'flex-1 py-3.5 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600';
-      $('tab-deposit').className = 'flex-1 py-3.5 text-sm font-semibold border-b-2 border-transparent text-slate-500';
+      $('tab-card').className = 'pb-3 px-4 font-semibold text-sm border-b-2 border-indigo-600 text-indigo-600';
+      $('tab-deposit').className = 'pb-3 px-4 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700';
     });
 
     $('form-deposit').addEventListener('submit', addDeposit);
@@ -1061,7 +1092,7 @@
     });
     $('btn-export').addEventListener('click', exportCSV);
     $('btn-print').addEventListener('click', function () { window.print(); });
-    $('btn-settings').addEventListener('click', function () {
+    $('sync-pill').addEventListener('click', function () {
       $('cfg-url').value = cfg.url || '';
       openModal('modal-settings');
     });
