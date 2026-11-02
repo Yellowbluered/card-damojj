@@ -13,6 +13,26 @@
 
   <a href="index.html" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">← 返回資金池</a>
 
+  <!-- 內置瀏覽器警告（微信／QQ／IG 等） -->
+  <div id="inapp" class="hidden bg-rose-50 border-2 border-rose-300 rounded-xl p-4 space-y-2">
+    <div class="font-bold text-rose-900 text-lg">⚠️ 你而家用緊 App 內置瀏覽器，Google 授權一定會失敗</div>
+    <p class="text-sm text-rose-800 leading-relaxed">
+      你頭先見到嘅「頁面載入失敗：請重新嘗試或在系統瀏覽器中打開」就係因為咁樣 ——
+      Google 唔准喺微信／QQ／IG 嘅內置瀏覽器做登入授權。
+    </p>
+    <p class="text-sm text-rose-900 font-semibold">解決方法（任揀一個）：</p>
+    <ul class="text-sm text-rose-800 list-disc pl-5 space-y-1">
+      <li><b>電腦：</b>撳呢個視窗右上角 <b>⋯</b> 或 <b>↗</b> → <b>在瀏覽器中開啟</b></li>
+      <li><b>手機：</b>撳右上角 <b>···</b> → <b>在瀏覽器開啟</b>（會用 Safari / Chrome）</li>
+      <li>或者複製下面條連結，貼去 Chrome / Edge / Safari 開</li>
+    </ul>
+    <div class="flex gap-2">
+      <input id="page-link" readonly class="flex-1 border border-rose-300 rounded-lg p-2 text-xs font-mono bg-white">
+      <button id="copy-page" class="bg-rose-600 hover:bg-rose-700 text-white font-semibold px-3 py-2 rounded-lg text-xs shrink-0">複製連結</button>
+    </div>
+    <p class="text-xs text-rose-700">重要：成個設定過程（試算表 → Apps Script → 授權 → 部署）都要喺同一個正常瀏覽器做完。</p>
+  </div>
+
   <header class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
     <h1 class="text-2xl font-bold">🔗 設定雲端同步</h1>
     <p class="text-sm text-slate-500 mt-2 leading-relaxed">
@@ -61,6 +81,7 @@
       <li>撳 <b>部署</b> → 會彈授權視窗 → 揀帳戶 → 撳 <b>進階</b> → <b>繼續前往（不安全）</b> → <b>允許</b></li>
     </ol>
     <p class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5">見到「Google 未驗證這個應用程式」係正常嘅，因為呢個 script 係你自己寫嘅。</p>
+    <p class="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg p-2.5">⚠️ 授權嗰下如果白畫面／顯示「頁面載入失敗」，代表你用緊微信等內置瀏覽器。<b>唔好再試</b>，改用 Chrome 重新做第 4 步（之前嘅檔案同代碼都仲喺度，唔需要重做 1–3 步）。</p>
   </section>
 
   <!-- Step 5 -->
@@ -103,6 +124,52 @@
     </p>
   </section>
 
+  <!-- 常見問題 -->
+  <section class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-3">
+    <h2 class="font-bold">🔧 卡住咗？對號入座</h2>
+
+    <details class="border border-slate-200 rounded-lg p-3" open>
+      <summary class="font-semibold text-sm cursor-pointer text-rose-700">撳「部署」之後，授權畫面白畫面／「頁面載入失敗」</summary>
+      <div class="text-sm text-slate-600 mt-2 space-y-1.5">
+        <p>原因：用咗微信／QQ／IG 等 App 嘅內置瀏覽器，Google 會拒絕授權。</p>
+        <p><b>做法：</b>用電腦嘅 Chrome／Edge 打開 <code class="bg-slate-100 px-1 rounded">script.google.com</code>，
+        搵返你頭先個專案（「未命名的專案」），之後只需要重新做<b>第 4 步：部署</b>。
+        試算表同已貼上嘅代碼都仲喺度，唔需要重頭做。</p>
+      </div>
+    </details>
+
+    <details class="border border-slate-200 rounded-lg p-3">
+      <summary class="font-semibold text-sm cursor-pointer">授權頁彈「Google 未驗證這個應用程式」</summary>
+      <div class="text-sm text-slate-600 mt-2">
+        撳左下角「<b>進階</b>」→「<b>繼續前往（不安全）</b>」→「<b>允許</b>」。呢個 script 係你自己嘅，唔會有安全問題。
+      </div>
+    </details>
+
+    <details class="border border-slate-200 rounded-lg p-3">
+      <summary class="font-semibold text-sm cursor-pointer">「測試連線」失敗，或者回應唔係 JSON</summary>
+      <div class="text-sm text-slate-600 mt-2 space-y-1.5">
+        <p>1. 部署時「具有應用程式存取權的使用者」<b>一定要揀「任何人」</b>（唔係「只有我自己」）。</p>
+        <p>2. 網址結尾一定要係 <code class="bg-slate-100 px-1 rounded">/exec</code>，唔係 <code class="bg-slate-100 px-1 rounded">/dev</code>。</p>
+        <p>3. 改過代碼之後要<b>重新部署</b>（部署 → 管理部署作業 → 編輯 → 版本揀「新版本」），否則行嘅仲係舊代碼。</p>
+      </div>
+    </details>
+
+    <details class="border border-slate-200 rounded-lg p-3">
+      <summary class="font-semibold text-sm cursor-pointer">手機開到網站但同步唔到</summary>
+      <div class="text-sm text-slate-600 mt-2">
+        同一個原因：確認你手機係用<b>正常瀏覽器</b>開分享連結，而唔係喺微信對話框入面直接開。
+        喺微信可以先「複製連結」，再貼去 Safari／Chrome。
+      </div>
+    </details>
+
+    <details class="border border-slate-200 rounded-lg p-3">
+      <summary class="font-semibold text-sm cursor-pointer">公司／學校 Google 帳戶用唔到 Apps Script</summary>
+      <div class="text-sm text-slate-600 mt-2">
+        機構帳戶經常封鎖 Apps Script 同 Drive 分享。改用<b>個人 Gmail</b> 帳戶開試算表就得。
+      </div>
+    </details>
+  </section>
+
   <p class="text-center text-xs text-slate-400">資料儲存喺你自己嘅 Google 試算表，可隨時登入 sheet 直接查看。</p>
 </div>
 
@@ -113,6 +180,30 @@
   var rawCode = '';
 
   function $(id) { return document.getElementById(id); }
+
+  /* 偵測 App 內置瀏覽器 */
+  function detectInApp() {
+    var ua = navigator.userAgent || '';
+    if (/MicroMessenger/i.test(ua)) return '微信';
+    if (/QQBrowser|\bQQ\//i.test(ua)) return 'QQ';
+    if (/Weibo/i.test(ua)) return '微博';
+    if (/DingTalk/i.test(ua)) return '釘釘';
+    if (/AlipayClient/i.test(ua)) return '支付寶';
+    if (/FBAN|FBAV/i.test(ua)) return 'Facebook';
+    if (/Instagram/i.test(ua)) return 'Instagram';
+    if (/Line\//i.test(ua)) return 'LINE';
+    if (/MicroMessenger|MQQBrowser/i.test(ua)) return 'App';
+    return '';
+  }
+
+  function showInAppBanner(name) {
+    var box = $('inapp');
+    if (!box) return;
+    box.classList.remove('hidden');
+    var title = box.querySelector('.font-bold');
+    if (title) title.textContent = '⚠️ 你而家用緊「' + name + '」內置瀏覽器，Google 授權一定會失敗';
+    $('page-link').value = location.href;
+  }
 
   function randomKey() {
     var abc = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -223,7 +314,13 @@
     }).then(function (r) { return r.text(); })
       .then(function (t) {
         var d;
-        try { d = JSON.parse(t); } catch (e) { throw new Error('回應唔係 JSON。可能未揀「任何人」存取權。'); }
+        try { d = JSON.parse(t); }
+        catch (e) {
+          if (/^\s*</.test(t)) {
+            throw new Error('收到 Google 嘅登入／錯誤頁面。通常係：① 授權未完成 或 ② 部署時存取權冇揀「任何人」');
+          }
+          throw new Error('回應唔係 JSON。可能未揀「任何人」存取權。');
+        }
         if (d.ok) {
           msg.className = 'text-sm rounded-lg p-2.5 bg-emerald-50 text-emerald-800';
           msg.textContent = '✅ 連線成功！雲端暫時有 ' + (d.state.deposits || []).length + ' 筆入金、' +
@@ -237,6 +334,25 @@
         msg.className = 'text-sm rounded-lg p-2.5 bg-rose-50 text-rose-700';
         msg.textContent = '❌ 連線失敗：' + e.message + '（最常見原因：部署時「存取權」未揀「任何人」）';
       });
+  });
+
+  var inApp = detectInApp();
+  if (inApp) showInAppBanner(inApp);
+
+  $('copy-page').addEventListener('click', function () {
+    var v = $('page-link').value || location.href;
+    var btn = $('copy-page');
+    var done = function () {
+      btn.textContent = '✅ 已複製';
+      setTimeout(function () { btn.textContent = '複製連結'; }, 1800);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(v).then(done).catch(function () {
+        $('page-link').select(); document.execCommand('copy'); done();
+      });
+    } else {
+      $('page-link').select(); document.execCommand('copy'); done();
+    }
   });
 
   loadKey();
