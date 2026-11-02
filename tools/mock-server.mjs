@@ -69,7 +69,10 @@ const api = http.createServer((req, res) => {
     if (action === 'merge') {
       const merged = mergeStates(store, payload.state || {});
       store = { ...merged, rev: store.rev + 1, updatedAt: Date.now() };
-      return json(res, { ok: true, rev: store.rev, updatedAt: store.updatedAt, state: merged });
+      // 模擬真實 Apps Script 嘅網絡延遲，用嚟重現「請求進行中」嘅競態
+      const delay = Number(process.env.MOCK_DELAY || 700);
+      const body = { ok: true, rev: store.rev, updatedAt: store.updatedAt, state: merged };
+      return setTimeout(() => json(res, body), delay);
     }
     if (action === 'upload') {
       return json(res, { ok: true, url: 'https://example.com/fake.jpg', id: 'fake' });

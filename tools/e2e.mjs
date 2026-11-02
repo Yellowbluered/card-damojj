@@ -232,7 +232,34 @@ async function main() {
     await B.activate();
     await waitFor(B, 'document.querySelectorAll("#deposit-rows tr").length', n0, '另一部機亦同步到刪除結果');
 
-    console.log('\n[8] 檢查兩個裝置有無 JavaScript 錯誤');
+    console.log('\n[8] 回歸測試：同步請求進行中撳確認刪除（真正嘅「要撳兩次」bug）');
+    await A.activate();
+    const m0 = await A.eval('document.querySelectorAll("#deposit-rows tr").length');
+    await A.eval(`document.querySelector('#deposit-rows button[data-act="del-dep"]').click()`);
+    await sleep(300);
+
+    // 等到有一個同步請求真係 in-flight（mock 後端有 700ms 延遲）
+    let busy = false;
+    for (let i = 0; i < 60 && !busy; i++) {
+      busy = await A.eval('!!(window.__cardpool && window.__cardpool.busy())');
+      if (!busy) await sleep(100);
+    }
+    assert(busy, '捕捉到進行中嘅同步請求');
+
+    await A.eval(`document.getElementById('confirm-ok').click()`);
+    await sleep(1200);
+    const m1 = await A.eval('document.querySelectorAll("#deposit-rows tr").length');
+    assert(m1 === m0 - 1, `請求進行中刪除，畫面即時少一行（${m0} → ${m1}）`);
+
+    // 關鍵：等回應返嚟 + 後續推送，確認唔會「彈返出嚟」
+    await sleep(6000);
+    const m2 = await A.eval('document.querySelectorAll("#deposit-rows tr").length');
+    assert(m2 === m0 - 1, `隔幾秒後仍然係 ${m0 - 1} 行，冇彈返出嚟（實際 ${m2}）`);
+
+    await B.activate();
+    await waitFor(B, 'document.querySelectorAll("#deposit-rows tr").length', m0 - 1, '另一部機接收到呢次刪除');
+
+    console.log('\n[9] 檢查兩個裝置有無 JavaScript 錯誤');
     const errs = [...A.errors, ...B.errors].filter((e) => !/favicon|tailwind|fonts\.googleapis|net::ERR/i.test(e));
     assert(errs.length === 0, '無 JavaScript 錯誤' + (errs.length ? ' → ' + errs.join(' | ') : ''));
 

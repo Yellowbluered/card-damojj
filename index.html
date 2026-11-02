@@ -327,7 +327,7 @@
       <button id="cfg-backup" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 rounded-lg text-sm">💾 下載完整備份 (JSON)</button>
       <button id="cfg-clear" class="w-full bg-rose-50 hover:bg-rose-100 text-rose-700 font-medium py-2.5 rounded-lg text-sm">🗑️ 清除本機資料（不影響雲端）</button>
     </div>
-    <p class="text-[11px] text-slate-400 break-all">裝置 ID：<span id="cfg-device"></span></p>
+    <p class="text-[11px] text-slate-400 break-all">版本 <span id="app-version" class="font-semibold">-</span> • 裝置 ID：<span id="cfg-device"></span></p>
   </div>
 </div>
 
@@ -350,6 +350,7 @@
      常數
   ============================================================ */
   var BASE_MEMBERS = ['Marco', 'Olivio', 'Alden', 'Dulio', 'Jeff', 'Justin'];
+  var APP_VERSION = '2026-11-02.3';
   var K_STATE = 'cardpool_state_v3';
   var K_CFG   = 'cardpool_cfg_v1';
   var K_IMG   = 'cardpool_imgs_v1';
@@ -540,24 +541,37 @@
     if (banner) banner.classList.toggle('hidden', !!cfg.url);
   }
 
+  var followUpTimer = null;
+
   function syncNow(reason) {
     if (!cfg.url) { setStatus('local'); return Promise.resolve(); }
     if (syncing) return Promise.resolve();
     syncing = true;
     setStatus('syncing');
 
-    var payloadState = stripForSync(state);
-    return apiPost({ action: 'merge', state: payloadState, clientId: cfg.clientId })
+    var sent = stripForSync(state);
+    var sentJson = JSON.stringify(sent);
+
+    return apiPost({ action: 'merge', state: sent, clientId: cfg.clientId })
       .then(function (data) {
         var remote = normalizeState(data.state);
-        var merged = mergeStates(payloadState, remote);
-        var changed = JSON.stringify(merged) !== JSON.stringify(payloadState);
-        state = merged;
+
+        // 關鍵：請求進行期間用戶可能已經改咗嘢（例如啱啱刪除一筆）。
+        // 如果同「送出前嘅快照」合併，嗰啲改動會被回應直接覆蓋返，
+        // 變成「刪除後隔一秒又彈返出嚟，要再撳一次」。
+        // 所以一定要同最新嘅 state 合併，並喺有未送出改動時再推一次。
+        var stillPending = JSON.stringify(stripForSync(state)) !== sentJson;
+        var before = JSON.stringify(state);
+
+        state = mergeStates(state, remote);
         persist();
-        if (changed) render();
+        if (JSON.stringify(state) !== before) render();
+
         lastSyncAt = Date.now();
         lastSyncError = '';
         setStatus('ok');
+
+        if (stillPending) schedulePush();
       })
       .catch(function (err) {
         lastSyncError = err && err.message ? err.message : String(err);
@@ -565,6 +579,15 @@
         console.warn('同步失敗(' + reason + ')', err);
       })
       .then(function () { syncing = false; });
+  }
+
+  /** 有改動喺請求期間發生，稍後再推一次（避免無限循環，只排一次） */
+  function schedulePush() {
+    if (followUpTimer) return;
+    followUpTimer = setTimeout(function () {
+      followUpTimer = null;
+      syncNow('followup');
+    }, 500);
   }
 
   function uploadImage(cardId, dataUrl) {
@@ -1073,6 +1096,7 @@
     }).join('');
 
     $('cfg-device').textContent = cfg.clientId;
+    $('app-version').textContent = APP_VERSION;
     $('cfg-url').value = cfg.url || '';
 
     bind();
@@ -1173,6 +1197,13 @@
       if (Date.now() - lastSyncAt > 3000) syncNow('focus');
     });
   }
+
+  /* 供自動化測試 / 除錯用（唔影響正常操作） */
+  window.__cardpool = {
+    sync: function () { return syncNow('debug'); },
+    busy: function () { return syncing; },
+    counts: function () { return { deposits: state.deposits.length, cards: state.cards.length }; }
+  };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
