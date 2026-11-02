@@ -1,759 +1,1135 @@
 <!DOCTYPE html>
-<html lang="zh-HK">
+<html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>合夥買卡資金池與交易動態管理系統</title>
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Google Font -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  
-  <style>
-    body { font-family: 'Inter', sans-serif; }
-    @media print {
-      .no-print { display: none; }
-    }
-  </style>
-  
-  <!-- Firebase SDK 雲端同步支持 -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-    // 全局變數
-    window.db = null;
-    window.appId = typeof __app_id !== 'undefined' ? __app_id : 'card-pool-group-tracker';
-    
-    // 初始化 Firebase (若有配置)
-    if (typeof __firebase_config !== 'undefined') {
-      try {
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        window.db = getFirestore(app);
-
-        const initAuth = async () => {
-          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-            await signInWithCustomToken(auth, __initial_auth_token);
-          } else {
-            await signInAnonymously(auth);
-          }
-          
-          // 訂閱雲端即時同步
-          const docRef = doc(window.db, 'artifacts', window.appId, 'public', 'data', 'tracker_state', 'main');
-          onSnapshot(docRef, (snapshot) => {
-            if (snapshot.exists()) {
-              const data = snapshot.data();
-              if (data.deposits) window.deposits = data.deposits;
-              if (data.cards) window.cards = data.cards;
-              if (window.render) window.render();
-            }
-          }, (err) => {
-            console.warn("雲端同步監聽錯誤或未設定:", err);
-          });
-        };
-        initAuth();
-      } catch (e) {
-        console.warn("Firebase 初始化跳過，使用本地儲存:", e);
-      }
-    }
-  </script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>合夥買卡資金池與交易動態管理系統</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'PingFang HK','Microsoft JhengHei',sans-serif}
+  .num{font-variant-numeric:tabular-nums}
+  @media print{.no-print{display:none!important}body{background:#fff!important}.max-w-7xl{max-width:none!important}}
+  input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  input[type=number]{-moz-appearance:textfield}
+</style>
 </head>
-<body class="bg-slate-100 min-h-screen text-slate-800 p-4 md:p-8">
+<body class="bg-slate-100 min-h-screen text-slate-800 pb-10">
 
-  <div class="max-w-7xl mx-auto space-y-6">
-    
-    <!-- 頁頭資訊欄 -->
-    <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-      <div>
-        <h1 class="text-2xl font-bold text-slate-900">🎴 合夥買卡資金池與交易動態管理系統</h1>
-        <p class="text-sm text-slate-500 mt-1">自動計算動態份額 (%) • 雲端即時同步 • 買賣卡明細 • 匯出 Excel</p>
-      </div>
-      <div class="flex gap-2 no-print">
-        <button onclick="exportToCSV()" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors shadow-xs">
-          <span>📊</span> 匯出 Excel (CSV)
-        </button>
-        <button onclick="window.print()" class="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-4 py-2 rounded-lg text-sm transition-colors">
-          <span>🖨️</span> 列印/PDF
-        </button>
-      </div>
-    </header>
+<div class="max-w-7xl mx-auto px-3 sm:px-6 pt-4 space-y-4">
 
-    <!-- 頂部即時數據統計卡片 -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
-        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">即時池內現金餘額</div>
-        <div id="stat-cash" class="text-2xl font-bold text-emerald-600 mt-2">¥ 0.00</div>
-        <div class="text-xs text-slate-400 mt-1">上限 ¥100,000 (可隨時調整)</div>
-      </div>
-
-      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
-        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">持卡總成本</div>
-        <div id="stat-card-cost" class="text-2xl font-bold text-indigo-600 mt-2">¥ 0.00</div>
-        <div id="stat-active-cards-count" class="text-xs text-slate-400 mt-1">持有中: 0 張卡</div>
-      </div>
-
-      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
-        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">已實現總盈虧 (已賣出)</div>
-        <div id="stat-profit" class="text-2xl font-bold text-slate-900 mt-2">¥ 0.00</div>
-        <div id="stat-roi" class="text-xs text-slate-400 mt-1">總投資回報率 (ROI): 0.00%</div>
-      </div>
-
-      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
-        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">歷史累計總入金</div>
-        <div id="stat-total-deposit" class="text-2xl font-bold text-slate-800 mt-2">¥ 0.00</div>
-        <div class="text-xs text-slate-400 mt-1">成員固定 6 人 (每月1號繳費)</div>
-      </div>
-    </div>
-
-    <!-- 主要功能區：動態份額與表單 -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-      <!-- 左側：成員動態權益份額 (%) 即時排行榜 -->
-      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-        <div>
-          <div class="flex justify-between items-center mb-4">
-            <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <span>👥</span> 成員即時動態份額 (%)
-            </h2>
-            <span class="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-medium">即時動態計算中</span>
-          </div>
-
-          <p class="text-xs text-slate-500 mb-4 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-            <strong>公式：</strong> 個人歷史累計入資 ÷ 全隊歷史累計總入資 × 100%<br>
-            所有卡牌賣出分紅與清算嚴格按此百分比劃分。
-          </p>
-
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm text-left">
-              <thead class="text-xs text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
-                <tr>
-                  <th class="pb-2 pt-2 pl-2">成員名稱</th>
-                  <th class="pb-2 pt-2 text-right">累計出資</th>
-                  <th class="pb-2 pt-2 text-right">權益份額 (%)</th>
-                </tr>
-              </thead>
-              <tbody id="member-share-table" class="divide-y divide-slate-100">
-                <!-- 動態生成 -->
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="mt-6 pt-4 border-t border-slate-100">
-          <div class="text-xs text-slate-400 flex justify-between">
-            <span>全隊總出資額</span>
-            <span id="share-total-deposit" class="font-bold text-slate-700">¥ 0</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 中間及右側：輸入表單區 -->
-      <div class="lg:col-span-2 space-y-6">
-        
-        <!-- 頁籤按鈕 (入金 vs 買卡) -->
-        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <div class="flex border-b border-slate-200 mb-6">
-            <button id="tab-btn-deposit" onclick="switchTab('deposit')" class="pb-3 px-4 font-semibold text-sm border-b-2 border-indigo-600 text-indigo-600">
-              ➕ 登記成員月度入金 (每月1號)
-            </button>
-            <button id="tab-btn-card" onclick="switchTab('card')" class="pb-3 px-4 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700">
-              🎴 登記買入新卡 (建倉)
-            </button>
-          </div>
-
-          <!-- 入金登記表單 -->
-          <form id="form-deposit" onsubmit="addDeposit(event)" class="space-y-4">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1">選擇月份 (每月1號固定入金)</label>
-                <input type="month" id="dep-month" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-              </div>
-              <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1">每名成員固定出資 (RMB)</label>
-                <input type="number" id="dep-amount" value="1000" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-              </div>
-            </div>
-
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-2">勾選本期已成功轉帳繳費之成員：</label>
-              <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-lg border border-slate-200">
-                <label class="flex items-center gap-2 cursor-pointer text-sm font-medium">
-                  <input type="checkbox" name="dep-members" value="Marco" checked class="w-4 h-4 text-indigo-600 rounded"> Marco
-                </label>
-                <label class="flex items-center gap-2 cursor-pointer text-sm font-medium">
-                  <input type="checkbox" name="dep-members" value="Olivio" checked class="w-4 h-4 text-indigo-600 rounded"> Olivio
-                </label>
-                <label class="flex items-center gap-2 cursor-pointer text-sm font-medium">
-                  <input type="checkbox" name="dep-members" value="Alden" checked class="w-4 h-4 text-indigo-600 rounded"> Alden
-                </label>
-                <label class="flex items-center gap-2 cursor-pointer text-sm font-medium">
-                  <input type="checkbox" name="dep-members" value="Dulio" checked class="w-4 h-4 text-indigo-600 rounded"> Dulio
-                </label>
-                <label class="flex items-center gap-2 cursor-pointer text-sm font-medium">
-                  <input type="checkbox" name="dep-members" value="Jeff" checked class="w-4 h-4 text-indigo-600 rounded"> Jeff
-                </label>
-                <label class="flex items-center gap-2 cursor-pointer text-sm font-medium">
-                  <input type="checkbox" name="dep-members" value="Justin" checked class="w-4 h-4 text-indigo-600 rounded"> Justin
-                </label>
-              </div>
-            </div>
-
-            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors shadow-xs">
-              確認提交當月入金紀錄
-            </button>
-          </form>
-
-          <!-- 買卡登記表單 (預設隱藏) -->
-          <form id="form-card" onsubmit="addCardBuy(event)" class="space-y-4 hidden">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1">購買日期</label>
-                <input type="date" id="buy-date" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-              </div>
-              <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1">球員姓名與卡牌詳情 (卡種/編號)</label>
-                <input type="text" id="buy-name" placeholder="例: 2023 Chrome Bellingham Auto /49" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1">成交金額 (RMB)</label>
-                <input type="number" step="0.01" id="buy-price" placeholder="0.00" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-              </div>
-              <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1">相關費用 (運費/平台手續費 RMB)</label>
-                <input type="number" step="0.01" id="buy-fee" value="0" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-              </div>
-            </div>
-
-            <!-- 相片拍攝/上載功能 -->
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">📷 上載卡牌相片 / 拍照</label>
-              <input type="file" id="buy-image" accept="image/*" onchange="previewCardImage(event)" class="w-full border border-slate-300 rounded-lg p-2 text-sm text-slate-500 bg-white cursor-pointer file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
-              <div id="image-preview-container" class="mt-2 hidden">
-                <img id="image-preview" src="#" alt="卡牌預覽" class="w-24 h-24 object-cover rounded-lg border border-slate-200 shadow-xs">
-              </div>
-            </div>
-
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">決策授權類別</label>
-              <select id="buy-note" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                <option value="Marco 獨力決定 (≤12,000元)">Marco 獨力決定 (≤12,000元)</option>
-                <option value="常規投票過半數同意 (12,001~20,000元)">常規投票過半數同意 (12,001~20,000元)</option>
-                <option value="常規投票極大多數同意 (>20,000元)">常規投票極大多數同意 (>20,000元)</option>
-                <option value="緊急採購特別條款 (>12,000元 限時≥3人同意)">緊急採購特別條款 (>12,000元 限時≥3人同意)</option>
-              </select>
-            </div>
-
-            <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors shadow-xs">
-              確認扣除資金池現金並買入卡牌
-            </button>
-          </form>
-
-        </div>
-      </div>
-    </div>
-
-    <!-- 下方：卡牌資產與交易明細表 -->
-    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <span>📦</span> 卡牌資產明細與平倉賣出紀錄
-          </h2>
-        </div>
-        <div class="flex gap-2 text-xs font-medium">
-          <span id="cards-tab-count" class="px-3 py-1 bg-blue-50 text-blue-700 rounded-md">持卡: 0</span>
-          <span id="sold-tab-count" class="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-md">已賣出: 0</span>
-        </div>
-      </div>
-
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm text-left">
-          <thead class="text-xs text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
-            <tr>
-              <th class="p-3 pl-4">卡牌相片與名稱 / 買入日</th>
-              <th class="p-3 text-right">總成本 (含費)</th>
-              <th class="p-3 text-center">狀態</th>
-              <th class="p-3 text-right">賣出淨回款</th>
-              <th class="p-3 text-right">單卡盈虧</th>
-              <th class="p-3 text-center pr-4">操作</th>
-            </tr>
-          </thead>
-          <tbody id="card-list-table" class="divide-y divide-slate-100">
-            <!-- 動態生成卡牌紀錄 -->
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- 歷史入金紀錄流水賬 -->
-    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <div class="p-6 border-b border-slate-100">
-        <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-          <span>🧾</span> 歷史入金紀錄流水賬
-        </h2>
-      </div>
-      <div class="overflow-x-auto max-h-64 overflow-y-auto">
-        <table class="w-full text-sm text-left">
-          <thead class="text-xs text-slate-400 uppercase bg-slate-50 border-b border-slate-100 sticky top-0">
-            <tr>
-              <th class="p-3 pl-4">月份</th>
-              <th class="p-3">繳費成員</th>
-              <th class="p-3 text-right">個人出資</th>
-              <th class="p-3 text-center pr-4">管理</th>
-            </tr>
-          </thead>
-          <tbody id="deposit-list-table" class="divide-y divide-slate-100">
-            <!-- 動態生成入金歷史 -->
-          </tbody>
-        </table>
-      </div>
-    </div>
-
+  <!-- 未連接雲端提示 -->
+  <div id="banner" class="hidden no-print bg-amber-50 border border-amber-200 text-amber-900 text-sm rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+    <div><b>⚠️ 未連接雲端資料庫</b> — 而家所有資料只係存喺呢部裝置，其他手機／iPad 完全睇唔到。</div>
+    <a href="setup.html" class="shrink-0 inline-flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-white font-semibold px-3 py-1.5 rounded-lg text-xs">立即設定同步 →</a>
   </div>
 
-  <!-- 賣出彈窗 Modal -->
-  <div id="sell-modal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50 hidden">
-    <div class="bg-white rounded-xl max-w-md w-full p-6 space-y-4 shadow-xl">
-      <h3 class="text-lg font-bold text-slate-900">🎴 執行卡牌平倉賣出</h3>
-      <p id="sell-card-name-display" class="text-xs text-slate-500 font-medium"></p>
-      
-      <form onsubmit="confirmSell(event)" class="space-y-4">
-        <input type="hidden" id="sell-card-id">
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">賣出成交日期</label>
-          <input type="date" id="sell-date" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+  <!-- 頁頭 -->
+  <header class="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div>
+      <h1 class="text-xl sm:text-2xl font-bold text-slate-900">🎴 合夥買卡資金池與交易動態管理系統</h1>
+      <p class="text-sm text-slate-500 mt-1">自動計算動態份額 (%) • 跨裝置即時同步 • 買賣卡明細 • 匯出 Excel</p>
+      <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+        <span id="sync-pill" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border font-medium">本機模式</span>
+        <span id="sync-detail" class="text-slate-400"></span>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-2 no-print">
+      <button id="btn-sync" class="flex items-center gap-2 bg-slate-700 hover:bg-slate-800 text-white font-medium px-3 py-2 rounded-lg text-sm">🔄 立即同步</button>
+      <button id="btn-export" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-3 py-2 rounded-lg text-sm">📊 匯出 CSV</button>
+      <button id="btn-print" class="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-3 py-2 rounded-lg text-sm">🖨️ 列印</button>
+      <button id="btn-settings" class="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-3 py-2 rounded-lg text-sm">⚙️</button>
+    </div>
+  </header>
+
+  <!-- 數據統計 -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+      <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">即時池內現金餘額</div>
+      <div id="stat-cash" class="num text-2xl font-bold text-emerald-600 mt-2">¥ 0.00</div>
+      <div class="text-xs text-slate-400 mt-1">入金 − 買卡 + 賣出回款</div>
+    </div>
+    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+      <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">持卡總成本</div>
+      <div id="stat-card-cost" class="num text-2xl font-bold text-indigo-600 mt-2">¥ 0.00</div>
+      <div id="stat-active-cards" class="text-xs text-slate-400 mt-1">持有中: 0 張卡</div>
+    </div>
+    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+      <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">已實現總盈虧</div>
+      <div id="stat-profit" class="num text-2xl font-bold text-slate-900 mt-2">¥ 0.00</div>
+      <div id="stat-roi" class="text-xs text-slate-400 mt-1">ROI: 0.00%</div>
+    </div>
+    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+      <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">歷史累計總入金</div>
+      <div id="stat-deposit" class="num text-2xl font-bold text-slate-800 mt-2">¥ 0.00</div>
+      <div id="stat-members" class="text-xs text-slate-400 mt-1">成員 6 人</div>
+    </div>
+  </div>
+
+  <!-- 份額 + 表單 -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
+
+    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="text-base font-bold text-slate-900">👥 成員即時動態份額</h2>
+        <span class="text-xs text-slate-400">即時計算</span>
+      </div>
+      <div class="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg p-2.5 leading-relaxed mb-3">
+        份額 = 個人歷史累計入資 ÷ 全隊歷史累計總入資 × 100%
+      </div>
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-xs text-slate-400 border-b border-slate-100">
+            <th class="text-left font-semibold py-2">成員</th>
+            <th class="text-right font-semibold py-2">累計出資</th>
+            <th class="text-right font-semibold py-2">份額</th>
+          </tr>
+        </thead>
+        <tbody id="share-rows"></tbody>
+        <tfoot>
+          <tr class="border-t-2 border-slate-100">
+            <td class="py-2.5 font-bold text-slate-700">合計</td>
+            <td id="share-total" class="py-2.5 text-right font-bold num">¥ 0</td>
+            <td class="py-2.5 text-right font-bold text-indigo-600">100%</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="flex border-b border-slate-100 no-print">
+        <button id="tab-deposit" class="flex-1 py-3.5 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600">➕ 登記每月入金</button>
+        <button id="tab-card" class="flex-1 py-3.5 text-sm font-semibold border-b-2 border-transparent text-slate-500">🎴 登記買入新卡</button>
+      </div>
+
+      <!-- 入金表單 -->
+      <form id="form-deposit" class="p-5 space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">繳費月份</label>
+            <input type="month" id="dep-month" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">每人出資 (RMB)</label>
+            <input type="number" step="0.01" id="dep-amount" value="1000" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+          </div>
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">賣出成交總價 (RMB)</label>
-          <input type="number" step="0.01" id="sell-price" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+          <label class="block text-xs font-semibold text-slate-600 mb-2">已成功轉帳嘅成員</label>
+          <div id="dep-members" class="grid grid-cols-2 sm:grid-cols-3 gap-2"></div>
+        </div>
+        <div class="flex gap-2 pt-1">
+          <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg text-sm">確認提交入金紀錄</button>
+        </div>
+      </form>
+
+      <!-- 買卡表單 -->
+      <form id="form-card" class="p-5 space-y-4 hidden">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">購買日期</label>
+            <input type="date" id="buy-date" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">成交金額 (RMB)</label>
+            <input type="number" step="0.01" id="buy-price" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+          </div>
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">扣除平台手續費/運費 (RMB)</label>
-          <input type="number" step="0.01" id="sell-fee" value="0" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+          <label class="block text-xs font-semibold text-slate-600 mb-1">球員姓名與卡牌詳情（卡種／編號）</label>
+          <input type="text" id="buy-name" required placeholder="例：2023 Prizm Wembanyama RC /99" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
         </div>
-        <div class="flex gap-2 pt-2">
-          <button type="button" onclick="closeSellModal()" class="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-sm">取消</button>
-          <button type="submit" class="w-1/2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 rounded-lg text-sm">確認賣出並入帳</button>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">相關費用（運費／手續費）</label>
+            <input type="number" step="0.01" id="buy-fee" value="0" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">決策授權記錄</label>
+            <select id="buy-note" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+              <option>Marco 獨力決定 (≤12,000元)</option>
+              <option>常規投票過半數 (12,001~20,000元)</option>
+              <option>常規投票極大多數 (&gt;20,000元)</option>
+              <option>緊急採購特別條款 (≥3人同意)</option>
+            </select>
+          </div>
         </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">卡牌相片（可選）</label>
+          <input type="file" id="buy-image" accept="image/*" class="w-full text-xs border border-slate-300 rounded-lg p-2 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700">
+          <div id="preview-box" class="hidden mt-2">
+            <img id="preview-img" class="h-24 rounded-lg border border-slate-200 object-cover" alt="預覽">
+          </div>
+        </div>
+        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg text-sm">確認扣除資金池並買入</button>
       </form>
     </div>
   </div>
 
-  <!-- 高清大圖預覽 Modal -->
-  <div id="image-modal" class="fixed inset-0 bg-slate-900/80 flex items-center justify-center p-4 z-50 hidden" onclick="closeImageModal()">
-    <div class="relative max-w-2xl w-full flex flex-col items-center">
-      <img id="modal-img-display" src="#" class="max-h-[80vh] max-w-full rounded-lg shadow-2xl object-contain">
-      <p id="modal-img-caption" class="text-white text-sm font-medium mt-3 bg-slate-800/80 px-4 py-1.5 rounded-full"></p>
+  <!-- 卡牌明細 -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="p-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
+      <h2 class="text-base font-bold text-slate-900">📦 卡牌資產明細</h2>
+      <div class="flex gap-2 text-xs">
+        <span id="cards-count" class="px-2 py-1 rounded-full bg-blue-50 text-blue-700 font-semibold">持卡: 0</span>
+        <span id="sold-count" class="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 font-semibold">已賣出: 0</span>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-xs text-slate-500">
+          <tr>
+            <th class="text-left font-semibold p-3 pl-4">卡牌 / 買入日</th>
+            <th class="text-right font-semibold p-3">總成本</th>
+            <th class="text-center font-semibold p-3">狀態</th>
+            <th class="text-right font-semibold p-3">賣出淨回款</th>
+            <th class="text-right font-semibold p-3">盈虧</th>
+            <th class="text-center font-semibold p-3 pr-4 no-print">操作</th>
+          </tr>
+        </thead>
+        <tbody id="card-rows" class="divide-y divide-slate-50"></tbody>
+      </table>
     </div>
   </div>
 
-  <!-- JavaScript 邏輯與數據綁定 -->
-  <script>
-    // 預設 6 人成員名單
-    const members = ["Marco", "Olivio", "Alden", "Dulio", "Jeff", "Justin"];
-    
-    // 初始化 State
-    let deposits = JSON.parse(localStorage.getItem("card_pool_deposits")) || [
-      { id: 1, month: "2026-01 (1號)", member: "Marco", amount: 1000 },
-      { id: 2, month: "2026-01 (1號)", member: "Olivio", amount: 1000 },
-      { id: 3, month: "2026-01 (1號)", member: "Alden", amount: 1000 },
-      { id: 4, month: "2026-01 (1號)", member: "Dulio", amount: 1000 },
-      { id: 5, month: "2026-01 (1號)", member: "Jeff", amount: 1000 },
-      { id: 6, month: "2026-01 (1號)", member: "Justin", amount: 1000 }
-    ];
-
-    let cards = JSON.parse(localStorage.getItem("card_pool_cards")) || [
-      {
-        id: 101,
-        buyDate: "2026-01-05",
-        name: "2023 Chrome Bellingham Auto /49",
-        imageData: null,
-        costPrice: 4500,
-        fee: 50,
-        totalCost: 4550,
-        note: "Marco 獨力決定 (≤12,000元)",
-        status: "ACTIVE", // ACTIVE 或 SOLD
-        sellDate: null,
-        sellPrice: null,
-        sellFee: null,
-        netReturn: null,
-        profit: null
-      }
-    ];
-
-    let currentImageBase64 = null;
-
-    // 設定預設日期
-    document.getElementById("dep-month").value = "2026-01";
-    document.getElementById("buy-date").valueAsDate = new Date();
-
-    // 圖片轉成 Base64 縮圖儲存
-    function previewCardImage(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const img = new Image();
-        img.onload = function() {
-          const canvas = document.createElement("canvas");
-          const MAX_WIDTH = 600;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > MAX_WIDTH) {
-            height = Math.round((height * MAX_WIDTH) / width);
-            width = MAX_WIDTH;
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0, width, height);
-
-          currentImageBase64 = canvas.toDataURL("image/jpeg", 0.7);
-          document.getElementById("image-preview").src = currentImageBase64;
-          document.getElementById("image-preview-container").classList.remove("hidden");
-        };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    }
-
-    function openImageModal(imgSrc, caption) {
-      document.getElementById("modal-img-display").src = imgSrc;
-      document.getElementById("modal-img-caption").innerText = caption;
-      document.getElementById("image-modal").classList.remove("hidden");
-    }
-
-    function closeImageModal() {
-      document.getElementById("image-modal").classList.add("hidden");
-    }
-
-    // 保存至本地
-    function saveState() {
-      localStorage.setItem("card_pool_deposits", JSON.stringify(deposits));
-      localStorage.setItem("card_pool_cards", JSON.stringify(cards));
-    }
-
-    // 切換表單頁籤
-    function switchTab(tab) {
-      if (tab === 'deposit') {
-        document.getElementById("form-deposit").classList.remove("hidden");
-        document.getElementById("form-card").classList.add("hidden");
-        document.getElementById("tab-btn-deposit").className = "pb-3 px-4 font-semibold text-sm border-b-2 border-indigo-600 text-indigo-600";
-        document.getElementById("tab-btn-card").className = "pb-3 px-4 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700";
-      } else {
-        document.getElementById("form-card").classList.remove("hidden");
-        document.getElementById("form-deposit").classList.add("hidden");
-        document.getElementById("tab-btn-card").className = "pb-3 px-4 font-semibold text-sm border-b-2 border-indigo-600 text-indigo-600";
-        document.getElementById("tab-btn-deposit").className = "pb-3 px-4 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700";
-      }
-    }
-
-    // 核心計算與渲染函數
-    window.render = function() {
-      saveState();
-
-      // 1. 計算全隊總出資與個人出資
-      let totalDeposit = 0;
-      const memberDeposits = {};
-      members.forEach(m => memberDeposits[m] = 0);
-
-      deposits.forEach(d => {
-        totalDeposit += Number(d.amount);
-        if (memberDeposits[d.member] !== undefined) {
-          memberDeposits[d.member] += Number(d.amount);
-        } else {
-          memberDeposits[d.member] = Number(d.amount);
-        }
-      });
-
-      // 2. 計算卡牌財務 (持卡成本、已賣出回款與盈虧)
-      let activeCardCost = 0;
-      let activeCardsCount = 0;
-      let totalSellNetReturn = 0;
-      let totalProfit = 0;
-      let soldCardsCount = 0;
-
-      cards.forEach(c => {
-        if (c.status === "ACTIVE") {
-          activeCardCost += Number(c.totalCost);
-          activeCardsCount++;
-        } else if (c.status === "SOLD") {
-          totalSellNetReturn += Number(c.netReturn);
-          totalProfit += Number(c.profit);
-          soldCardsCount++;
-        }
-      });
-
-      // 即時現金餘額 = 歷史總入金 - 持卡總成本 + 已賣出卡牌淨回款
-      const cashBalance = totalDeposit - activeCardCost + totalSellNetReturn;
-
-      // 3. 渲染頂部卡片
-      document.getElementById("stat-cash").innerText = `¥ ${cashBalance.toLocaleString('zh-CN', {minimumFractionDigits: 2})}`;
-      document.getElementById("stat-card-cost").innerText = `¥ ${activeCardCost.toLocaleString('zh-CN', {minimumFractionDigits: 2})}`;
-      document.getElementById("stat-active-cards-count").innerText = `持有中: ${activeCardsCount} 張卡`;
-      document.getElementById("stat-total-deposit").innerText = `¥ ${totalDeposit.toLocaleString('zh-CN', {minimumFractionDigits: 2})}`;
-      
-      const profitEl = document.getElementById("stat-profit");
-      profitEl.innerText = `${totalProfit >= 0 ? '+' : ''}¥ ${totalProfit.toLocaleString('zh-CN', {minimumFractionDigits: 2})}`;
-      profitEl.className = `text-2xl font-bold mt-2 ${totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`;
-
-      const roi = totalDeposit > 0 ? (totalProfit / totalDeposit) * 100 : 0;
-      document.getElementById("stat-roi").innerText = `總投資回報率 (ROI): ${roi.toFixed(2)}%`;
-
-      // 4. 渲染成員動態份額 (%) 表格
-      document.getElementById("share-total-deposit").innerText = `¥ ${totalDeposit.toLocaleString('zh-CN')}`;
-      const shareTable = document.getElementById("member-share-table");
-      shareTable.innerHTML = members.map(m => {
-        const userDep = memberDeposits[m] || 0;
-        const sharePct = totalDeposit > 0 ? ((userDep / totalDeposit) * 100).toFixed(2) : "0.00";
-        return `
-          <tr class="hover:bg-slate-50">
-            <td class="py-2.5 pl-2 font-medium text-slate-800">${m}</td>
-            <td class="py-2.5 text-right font-medium">¥ ${userDep.toLocaleString('zh-CN')}</td>
-            <td class="py-2.5 text-right font-bold text-indigo-600">${sharePct}%</td>
+  <!-- 入金流水 -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+      <h2 class="text-base font-bold text-slate-900">🧾 歷史入金紀錄</h2>
+      <span id="deposit-count" class="text-xs text-slate-400"></span>
+    </div>
+    <div class="overflow-x-auto max-h-96 overflow-y-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-xs text-slate-500 sticky top-0">
+          <tr>
+            <th class="text-left font-semibold p-3 pl-4">月份</th>
+            <th class="text-left font-semibold p-3">成員</th>
+            <th class="text-right font-semibold p-3">金額</th>
+            <th class="text-center font-semibold p-3 pr-4 no-print">操作</th>
           </tr>
-        `;
+        </thead>
+        <tbody id="deposit-rows" class="divide-y divide-slate-50"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="text-center text-xs text-slate-400 no-print">
+    資料自動同步 • <a href="setup.html" class="underline hover:text-slate-600">同步設定說明</a>
+  </p>
+</div>
+
+<!-- 賣出彈窗 -->
+<div id="modal-sell" class="hidden fixed inset-0 z-40 bg-slate-900/60 p-4 items-center justify-center">
+  <div class="bg-white w-full max-w-md rounded-xl shadow-2xl p-5 space-y-4">
+    <div class="flex justify-between items-start">
+      <h3 class="text-lg font-bold text-slate-900">🎴 平倉賣出</h3>
+      <button data-close="modal-sell" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
+    </div>
+    <p id="sell-card-name" class="text-sm text-slate-600 bg-slate-50 rounded-lg p-2.5"></p>
+    <form id="form-sell" class="space-y-3">
+      <input type="hidden" id="sell-id">
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">賣出日期</label>
+        <input type="date" id="sell-date" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">成交總價 (RMB)</label>
+        <input type="number" step="0.01" id="sell-price" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">平台手續費 / 運費 (RMB)</label>
+        <input type="number" step="0.01" id="sell-fee" value="0" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+      </div>
+      <div class="flex gap-2 pt-1">
+        <button type="button" data-close="modal-sell" class="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 rounded-lg text-sm">取消</button>
+        <button type="submit" class="w-1/2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-lg text-sm">確認賣出</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 分紅彈窗 -->
+<div id="modal-dividend" class="hidden fixed inset-0 z-40 bg-slate-900/60 p-4 items-center justify-center">
+  <div class="bg-white w-full max-w-lg rounded-xl shadow-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+    <div class="flex justify-between items-start">
+      <h3 class="text-lg font-bold text-slate-900">💰 賣出分紅明細</h3>
+      <button data-close="modal-dividend" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
+    </div>
+    <div id="dividend-body" class="space-y-3 text-sm"></div>
+    <button type="button" data-close="modal-dividend" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 rounded-lg text-sm">關閉</button>
+  </div>
+</div>
+
+<!-- 確認彈窗 -->
+<div id="modal-confirm" class="hidden fixed inset-0 z-50 bg-slate-900/60 p-4 items-center justify-center">
+  <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-5 space-y-4">
+    <h3 id="confirm-title" class="text-lg font-bold text-slate-900">確認</h3>
+    <p id="confirm-msg" class="text-sm text-slate-600 leading-relaxed whitespace-pre-line"></p>
+    <div class="flex gap-2 pt-1">
+      <button id="confirm-cancel" class="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 rounded-lg text-sm">取消</button>
+      <button id="confirm-ok" class="w-1/2 bg-rose-600 hover:bg-rose-700 text-white font-semibold py-2.5 rounded-lg text-sm">確認刪除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 設定彈窗 -->
+<div id="modal-settings" class="hidden fixed inset-0 z-40 bg-slate-900/60 p-4 items-center justify-center">
+  <div class="bg-white w-full max-w-lg rounded-xl shadow-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+    <div class="flex justify-between items-start">
+      <h3 class="text-lg font-bold text-slate-900">⚙️ 同步設定</h3>
+      <button data-close="modal-settings" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
+    </div>
+    <div class="text-xs bg-slate-50 border border-slate-100 rounded-lg p-3 leading-relaxed">
+      未設定嘅話，資料只會存喺呢部裝置。請去 <a href="setup.html" class="text-indigo-600 underline font-semibold">設定精靈</a> 取得雲端網址，貼落下面。
+    </div>
+    <div>
+      <label class="block text-xs font-semibold text-slate-600 mb-1">雲端資料庫網址 (Apps Script /exec)</label>
+      <textarea id="cfg-url" rows="3" class="w-full border border-slate-300 rounded-lg p-2.5 text-xs font-mono" placeholder="https://script.google.com/macros/s/AKfy.../exec?k=..."></textarea>
+    </div>
+    <div class="grid grid-cols-2 gap-2">
+      <button id="cfg-save" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg text-sm">儲存並連接</button>
+      <button id="cfg-test" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium py-2.5 rounded-lg text-sm">測試連線</button>
+    </div>
+    <div class="border-t border-slate-100 pt-3 space-y-2">
+      <button id="cfg-backup" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 rounded-lg text-sm">💾 下載完整備份 (JSON)</button>
+      <button id="cfg-clear" class="w-full bg-rose-50 hover:bg-rose-100 text-rose-700 font-medium py-2.5 rounded-lg text-sm">🗑️ 清除本機資料（不影響雲端）</button>
+    </div>
+    <p class="text-[11px] text-slate-400 break-all">裝置 ID：<span id="cfg-device"></span></p>
+  </div>
+</div>
+
+<!-- 圖片預覽 -->
+<div id="modal-image" class="hidden fixed inset-0 z-50 bg-slate-900/85 p-4 items-center justify-center">
+  <div class="flex flex-col items-center gap-3 max-w-2xl w-full" data-close="modal-image">
+    <img id="modal-image-img" class="max-h-[78vh] max-w-full rounded-lg shadow-2xl object-contain" alt="">
+    <p id="modal-image-cap" class="text-white text-sm bg-slate-800/80 px-4 py-1.5 rounded-full"></p>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] px-4 py-2.5 rounded-lg text-sm font-medium shadow-lg"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ============================================================
+     常數
+  ============================================================ */
+  var BASE_MEMBERS = ['Marco', 'Olivio', 'Alden', 'Dulio', 'Jeff', 'Justin'];
+  var K_STATE = 'cardpool_state_v3';
+  var K_CFG   = 'cardpool_cfg_v1';
+  var K_IMG   = 'cardpool_imgs_v1';
+  var POLL_MS = 4000;
+  var POLL_HIDDEN_MS = 20000;
+
+  /* ============================================================
+     工具
+  ============================================================ */
+  function $(id) { return document.getElementById(id); }
+  function num(v) { var n = Number(v); return isFinite(n) ? n : 0; }
+  function money(n) { return '¥ ' + num(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function money0(n) { return '¥ ' + num(n).toLocaleString('zh-CN'); }
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function localDate(d) { d = d || new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function uid(p) { return (p || 'r') + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  /* ============================================================
+     狀態
+  ============================================================ */
+  var state = { deposits: [], cards: [] };
+  var imgCache = {};
+  var cfg = { url: '', clientId: '' };
+  var syncStatus = 'local';
+  var lastSyncAt = 0;
+  var lastSyncError = '';
+  var syncing = false;
+  var pollTimer = null;
+  var pendingImage = null;
+
+  /* ============================================================
+     資料正規化 / 合併
+  ============================================================ */
+  function normalizeState(raw) {
+    var out = { deposits: [], cards: [] };
+    if (!raw || typeof raw !== 'object') return out;
+    ['deposits', 'cards'].forEach(function (k) {
+      if (!Array.isArray(raw[k])) return;
+      out[k] = raw[k].filter(function (r) { return r && typeof r === 'object'; }).map(function (r) {
+        var o = {};
+        for (var p in r) if (Object.prototype.hasOwnProperty.call(r, p)) o[p] = r[p];
+        if (!o.id) o.id = uid(k.charAt(0));
+        o.id = String(o.id);
+        o.updatedAt = num(o.updatedAt);
+        return o;
+      });
+    });
+    return out;
+  }
+
+  /** 逐筆 Last-Write-Wins 合併：以 id 為單位，updatedAt 較大者勝出 */
+  function mergeStates(a, b) {
+    var out = { deposits: [], cards: [] };
+    ['deposits', 'cards'].forEach(function (k) {
+      var map = {}, order = [];
+      var lists = [a[k] || [], b[k] || []];
+      for (var li = 0; li < lists.length; li++) {
+        var list = lists[li];
+        for (var i = 0; i < list.length; i++) {
+          var r = list[i];
+          if (!r || !r.id) continue;
+          var id = String(r.id);
+          var t = num(r.updatedAt);
+          var prev = map[id];
+          if (!prev) { map[id] = r; order.push(id); }
+          else if (t >= num(prev.updatedAt)) { map[id] = r; }
+        }
+      }
+      out[k] = order.map(function (id) { return map[id]; });
+    });
+    return out;
+  }
+
+  function visible(list) {
+    return (list || []).filter(function (r) { return !r.deleted; });
+  }
+
+  /* ============================================================
+     本機儲存
+  ============================================================ */
+  function persist() {
+    try { localStorage.setItem(K_STATE, JSON.stringify(state)); } catch (e) { console.warn('state 儲存失敗', e); }
+    try { localStorage.setItem(K_IMG, JSON.stringify(imgCache)); } catch (e) { trimImages(); }
+  }
+
+  function trimImages() {
+    var keys = Object.keys(imgCache);
+    if (keys.length > 30) keys.slice(0, keys.length - 30).forEach(function (k) { delete imgCache[k]; });
+    try { localStorage.setItem(K_IMG, JSON.stringify(imgCache)); } catch (e) { console.warn('相片快取過大', e); }
+  }
+
+  function saveCfg() {
+    try { localStorage.setItem(K_CFG, JSON.stringify(cfg)); } catch (e) { console.warn(e); }
+  }
+
+  function loadInitialState() {
+    var raw = localStorage.getItem(K_STATE);
+    if (raw) {
+      try { return normalizeState(JSON.parse(raw)); } catch (e) { console.warn('本機資料損壞，忽略', e); }
+    }
+    try {
+      var d = JSON.parse(localStorage.getItem('card_pool_deposits') || 'null');
+      var c = JSON.parse(localStorage.getItem('card_pool_cards') || 'null');
+      if (Array.isArray(d) || Array.isArray(c)) {
+        var mig = normalizeState({ deposits: d || [], cards: c || [] });
+        mig.deposits.forEach(function (x) { x.updatedAt = 1; });
+        mig.cards.forEach(function (x) { x.updatedAt = 1; });
+        return mig;
+      }
+    } catch (e) { /* 忽略 */ }
+    return { deposits: [], cards: [] };
+  }
+
+  /* ============================================================
+     雲端同步
+  ============================================================ */
+  function syncUrl() {
+    if (!cfg.url) return '';
+    return cfg.url + (cfg.url.indexOf('?') >= 0 ? '&' : '?') + '_t=' + Date.now();
+  }
+
+  function stripForSync(s) {
+    return {
+      deposits: (s.deposits || []).map(function (r) { var o = {}; for (var p in r) o[p] = r[p]; return o; }),
+      cards: (s.cards || []).map(function (r) {
+        var o = {};
+        for (var p in r) if (p !== 'imageData') o[p] = r[p];
+        return o;
+      })
+    };
+  }
+
+  function apiPost(body) {
+    return fetch(syncUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+      redirect: 'follow'
+    }).then(function (res) {
+      return res.text().then(function (txt) {
+        var data;
+        try { data = JSON.parse(txt); } catch (e) { throw new Error('雲端回應格式錯誤，請檢查網址是否正確'); }
+        if (!data || data.ok !== true) throw new Error((data && data.error) || '雲端回報錯誤');
+        return data;
+      });
+    });
+  }
+
+  function setStatus(s) { syncStatus = s; paintStatus(); }
+
+  function paintStatus() {
+    var pill = $('sync-pill'), detail = $('sync-detail');
+    if (!pill) return;
+    var cls = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border font-medium ';
+    var txt = '本機模式';
+
+    if (!cfg.url) {
+      cls += 'bg-slate-100 text-slate-600 border-slate-200';
+      txt = '⚠️ 本機模式（未同步）';
+    } else if (syncStatus === 'syncing') {
+      cls += 'bg-amber-50 text-amber-700 border-amber-200';
+      txt = '同步中…';
+    } else if (syncStatus === 'ok') {
+      cls += 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      txt = '🟢 已同步';
+    } else if (syncStatus === 'error') {
+      cls += 'bg-rose-50 text-rose-700 border-rose-200';
+      txt = '🔴 連線失敗';
+    } else {
+      cls += 'bg-slate-100 text-slate-600 border-slate-200';
+      txt = '等待同步';
+    }
+    pill.className = cls;
+    pill.textContent = txt;
+
+    if (detail) {
+      if (syncStatus === 'error' && lastSyncError) detail.textContent = lastSyncError.slice(0, 40);
+      else if (lastSyncAt) detail.textContent = '最後同步 ' + new Date(lastSyncAt).toLocaleTimeString('zh-HK', { hour12: false });
+      else detail.textContent = '';
+    }
+    var banner = $('banner');
+    if (banner) banner.classList.toggle('hidden', !!cfg.url);
+  }
+
+  function syncNow(reason) {
+    if (!cfg.url) { setStatus('local'); return Promise.resolve(); }
+    if (syncing) return Promise.resolve();
+    syncing = true;
+    setStatus('syncing');
+
+    var payloadState = stripForSync(state);
+    return apiPost({ action: 'merge', state: payloadState, clientId: cfg.clientId })
+      .then(function (data) {
+        var remote = normalizeState(data.state);
+        var merged = mergeStates(payloadState, remote);
+        var changed = JSON.stringify(merged) !== JSON.stringify(payloadState);
+        state = merged;
+        persist();
+        if (changed) render();
+        lastSyncAt = Date.now();
+        lastSyncError = '';
+        setStatus('ok');
+      })
+      .catch(function (err) {
+        lastSyncError = err && err.message ? err.message : String(err);
+        setStatus('error');
+        console.warn('同步失敗(' + reason + ')', err);
+      })
+      .then(function () { syncing = false; });
+  }
+
+  function uploadImage(cardId, dataUrl) {
+    if (!cfg.url) return;
+    var base64 = String(dataUrl).split(',')[1];
+    if (!base64) return;
+    apiPost({ action: 'upload', data: base64, filename: cardId + '.jpg' })
+      .then(function (data) {
+        if (!data.url) return;
+        var card = null;
+        for (var i = 0; i < state.cards.length; i++) if (state.cards[i].id === cardId) card = state.cards[i];
+        if (!card) return;
+        card.imageUrl = data.url;
+        card.updatedAt = Date.now();
+        persist();
+        render();
+        syncNow('upload');
+      })
+      .catch(function (e) { console.warn('相片上載失敗（只保留本機）', e); });
+  }
+
+  function schedulePoll() {
+    if (pollTimer) clearInterval(pollTimer);
+    var ms = document.hidden ? POLL_HIDDEN_MS : POLL_MS;
+    pollTimer = setInterval(function () {
+      if (!document.hidden && !syncing) syncNow('poll');
+    }, ms);
+  }
+
+  /* ============================================================
+     計算
+  ============================================================ */
+  function computeAll() {
+    var ds = visible(state.deposits);
+    var cs = visible(state.cards);
+
+    var totalDeposit = 0;
+    var byMember = {};
+    var members = BASE_MEMBERS.slice();
+
+    ds.forEach(function (d) {
+      var a = num(d.amount);
+      totalDeposit += a;
+      var m = d.member || '未命名';
+      if (members.indexOf(m) < 0) members.push(m);
+      byMember[m] = (byMember[m] || 0) + a;
+    });
+
+    var activeCost = 0, activeCount = 0, soldNet = 0, profit = 0, soldCount = 0;
+    cs.forEach(function (c) {
+      if (c.status === 'SOLD') {
+        soldNet += num(c.netReturn);
+        profit += num(c.profit);
+        soldCount++;
+      } else {
+        activeCost += num(c.totalCost);
+        activeCount++;
+      }
+    });
+
+    var cash = totalDeposit - activeCost + soldNet;
+    var roi = totalDeposit > 0 ? (profit / totalDeposit) * 100 : 0;
+
+    return {
+      members: members, byMember: byMember, totalDeposit: totalDeposit,
+      activeCost: activeCost, activeCount: activeCount,
+      soldNet: soldNet, profit: profit, soldCount: soldCount,
+      cash: cash, roi: roi, deposits: ds, cards: cs
+    };
+  }
+
+  /* ============================================================
+     渲染
+  ============================================================ */
+  function render() {
+    var d = computeAll();
+
+    $('stat-cash').textContent = money(d.cash);
+    $('stat-cash').className = 'num text-2xl font-bold mt-2 ' + (d.cash < 0 ? 'text-rose-600' : 'text-emerald-600');
+    $('stat-card-cost').textContent = money(d.activeCost);
+    $('stat-active-cards').textContent = '持有中: ' + d.activeCount + ' 張卡';
+    $('stat-profit').textContent = (d.profit >= 0 ? '+' : '') + money(d.profit);
+    $('stat-profit').className = 'num text-2xl font-bold mt-2 ' + (d.profit >= 0 ? 'text-emerald-600' : 'text-rose-600');
+    $('stat-roi').textContent = 'ROI: ' + d.roi.toFixed(2) + '%';
+    $('stat-deposit').textContent = money(d.totalDeposit);
+    $('stat-members').textContent = '成員 ' + d.members.length + ' 人 • 每月 1 號繳費';
+
+    var rows = d.members.map(function (m) {
+      var amt = d.byMember[m] || 0;
+      var pct = d.totalDeposit > 0 ? (amt / d.totalDeposit) * 100 : 0;
+      return '<tr class="hover:bg-slate-50">' +
+        '<td class="py-2.5 text-slate-800 font-medium">' + esc(m) + '</td>' +
+        '<td class="py-2.5 text-right num text-slate-600">' + money0(amt) + '</td>' +
+        '<td class="py-2.5 text-right num font-bold text-indigo-600">' + pct.toFixed(2) + '%</td>' +
+        '</tr>';
+    }).join('');
+    $('share-rows').innerHTML = rows || '<tr><td colspan="3" class="py-6 text-center text-slate-400 text-xs">尚未有入金</td></tr>';
+    $('share-total').textContent = money0(d.totalDeposit);
+
+    $('cards-count').textContent = '持卡: ' + d.activeCount;
+    $('sold-count').textContent = '已賣出: ' + d.soldCount;
+
+    var tbody = $('card-rows');
+    if (!d.cards.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-400 text-sm">暫時未有卡牌紀錄</td></tr>';
+    } else {
+      var sorted = d.cards.slice().sort(function (a, b) { return String(b.buyDate || '').localeCompare(String(a.buyDate || '')); });
+      tbody.innerHTML = sorted.map(function (c) {
+        var isSold = c.status === 'SOLD';
+        var src = c.imageUrl || imgCache[c.id] || '';
+        var thumb = src
+          ? '<img src="' + esc(src) + '" data-act="img" data-id="' + esc(c.id) + '" class="w-12 h-12 object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-80 shrink-0" alt="">'
+          : '<div class="w-12 h-12 bg-slate-100 text-slate-300 rounded-lg flex items-center justify-center text-[10px] shrink-0 border border-slate-200">無相片</div>';
+        var statusBadge = isSold
+          ? '<span class="px-2 py-0.5 text-xs font-semibold rounded bg-emerald-100 text-emerald-800">已賣出</span>'
+          : '<span class="px-2 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">持有中</span>';
+        var profitHtml = isSold
+          ? '<span class="' + (num(c.profit) >= 0 ? 'text-emerald-600' : 'text-rose-600') + '">' + (num(c.profit) >= 0 ? '+' : '') + money(c.profit) + '</span>'
+          : '<span class="text-slate-300">—</span>';
+        var actions = isSold
+          ? '<button data-act="dividend" data-id="' + esc(c.id) + '" class="px-2.5 py-1 text-xs bg-amber-500 hover:bg-amber-600 text-white font-medium rounded">分紅</button>' +
+            '<button data-act="del-card" data-id="' + esc(c.id) + '" class="px-2.5 py-1 text-xs text-rose-600 border border-rose-200 hover:bg-rose-50 font-medium rounded">剷除</button>'
+          : '<button data-act="sell" data-id="' + esc(c.id) + '" class="px-2.5 py-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded">平倉賣出</button>' +
+            '<button data-act="del-card" data-id="' + esc(c.id) + '" class="px-2.5 py-1 text-xs text-rose-600 border border-rose-200 hover:bg-rose-50 font-medium rounded">剷除</button>';
+
+        return '<tr class="hover:bg-slate-50" data-row="' + esc(c.id) + '">' +
+          '<td class="p-3 pl-4"><div class="flex items-center gap-3">' + thumb +
+            '<div class="min-w-0"><div class="font-medium text-slate-900 break-words">' + esc(c.name) + '</div>' +
+            '<div class="text-[11px] text-slate-400 mt-0.5">買入: ' + esc(c.buyDate) + ' • ' + esc(c.note || '') + '</div></div>' +
+          '</div></td>' +
+          '<td class="p-3 text-right num font-medium text-slate-700">' + money(c.totalCost) + '</td>' +
+          '<td class="p-3 text-center">' + statusBadge + '</td>' +
+          '<td class="p-3 text-right num text-slate-600">' + (isSold ? money(c.netReturn) : '—') + '</td>' +
+          '<td class="p-3 text-right num font-bold">' + profitHtml + '</td>' +
+          '<td class="p-3 pr-4 no-print"><div class="flex items-center justify-center gap-1.5 flex-wrap">' + actions + '</div></td>' +
+        '</tr>';
       }).join('');
+    }
 
-      // 5. 渲染卡牌列表
-      document.getElementById("cards-tab-count").innerText = `持卡: ${activeCardsCount}`;
-      document.getElementById("sold-tab-count").innerText = `已賣出: ${soldCardsCount}`;
+    $('deposit-count').textContent = d.deposits.length + ' 筆';
+    var dbody = $('deposit-rows');
+    if (!d.deposits.length) {
+      dbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-slate-400 text-sm">暫時未有入金紀錄</td></tr>';
+    } else {
+      var ds = d.deposits.slice().sort(function (a, b) { return String(b.month || '').localeCompare(String(a.month || '')); });
+      dbody.innerHTML = ds.map(function (x) {
+        return '<tr class="hover:bg-slate-50">' +
+          '<td class="p-3 pl-4 font-medium text-slate-900">' + esc(x.month) + '</td>' +
+          '<td class="p-3 text-slate-700">' + esc(x.member) + '</td>' +
+          '<td class="p-3 text-right num font-semibold text-emerald-600">' + money(x.amount) + '</td>' +
+          '<td class="p-3 pr-4 text-center no-print"><button data-act="del-dep" data-id="' + esc(x.id) + '" class="text-xs text-rose-500 hover:text-rose-700 hover:underline">刪除</button></td>' +
+        '</tr>';
+      }).join('');
+    }
 
-      const cardTable = document.getElementById("card-list-table");
-      if (cards.length === 0) {
-        cardTable.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400 text-xs">目前暫無卡牌紀錄</td></tr>`;
-      } else {
-        cardTable.innerHTML = cards.map(c => {
-          const isSold = c.status === "SOLD";
-          const imgHtml = c.imageData 
-            ? `<img src="${c.imageData}" onclick="openImageModal('${c.imageData}', '${c.name}')" class="w-12 h-12 object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-80 transition-opacity shadow-2xs flex-shrink-0">` 
-            : `<div class="w-12 h-12 bg-slate-100 text-slate-400 rounded-lg flex items-center justify-center text-xs flex-shrink-0 border border-slate-200">無相片</div>`;
+    paintStatus();
+  }
 
-          return `
-            <tr class="hover:bg-slate-50 transition-colors">
-              <td class="p-3 pl-4">
-                <div class="flex items-center gap-3">
-                  ${imgHtml}
-                  <div>
-                    <div class="font-medium text-slate-900">${c.name}</div>
-                    <div class="text-xs text-slate-400">買入日: ${c.buyDate} • <span class="text-indigo-600">${c.note}</span></div>
-                  </div>
-                </div>
-              </td>
-              <td class="p-3 text-right font-medium">¥ ${Number(c.totalCost).toLocaleString('zh-CN')}</td>
-              <td class="p-3 text-center">
-                ${isSold 
-                  ? `<span class="px-2 py-0.5 text-xs font-semibold rounded bg-emerald-100 text-emerald-800">已平倉賣出</span>`
-                  : `<span class="px-2 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">持有中</span>`}
-              </td>
-              <td class="p-3 text-right font-medium text-slate-700">
-                ${isSold ? `¥ ${Number(c.netReturn).toLocaleString('zh-CN')}` : '-'}
-              </td>
-              <td class="p-3 text-right font-bold">
-                ${isSold 
-                  ? (c.profit >= 0 
-                      ? `<span class="text-emerald-600">+¥ ${Number(c.profit).toLocaleString('zh-CN')}</span>` 
-                      : `<span class="text-rose-600">-¥ ${Math.abs(c.profit).toLocaleString('zh-CN')}</span>`)
-                  : '-'}
-              </td>
-              <td class="p-3 text-center pr-4 no-print">
-                <div class="flex items-center justify-center gap-1.5">
-                  ${!isSold 
-                    ? `<button onclick="openSellModal(${c.id})" class="px-2.5 py-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded transition-colors">平倉賣出</button>
-                       <button onclick="deleteCard(${c.id})" class="px-2 py-1 text-xs text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition-colors" title="刪除紀錄">剷除</button>`
-                    : `<button onclick="deleteCard(${c.id})" class="px-2 py-1 text-xs text-slate-400 hover:text-rose-600">刪除</button>`}
-                </div>
-              </td>
-            </tr>
-          `;
-        }).join('');
-      }
+  /* ============================================================
+     通用 UI
+  ============================================================ */
+  var toastTimer = null;
+  function toast(msg, type) {
+    var el = $('toast');
+    el.textContent = msg;
+    el.className = 'fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] px-4 py-2.5 rounded-lg text-sm font-medium shadow-lg ' +
+      (type === 'error' ? 'bg-rose-600 text-white' : type === 'warn' ? 'bg-amber-500 text-white' : 'bg-slate-900 text-white');
+    el.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.add('hidden'); }, 2600);
+  }
 
-      // 6. 渲染歷史入金紀錄
-      const depositTable = document.getElementById("deposit-list-table");
-      if (deposits.length === 0) {
-        depositTable.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-slate-400 text-xs">目前暫無入金紀錄</td></tr>`;
-      } else {
-        depositTable.innerHTML = deposits.slice().reverse().map(d => `
-          <tr class="hover:bg-slate-50">
-            <td class="p-3 pl-4 font-medium text-slate-900">${d.month}</td>
-            <td class="p-3 font-medium text-slate-700">${d.member}</td>
-            <td class="p-3 text-right font-semibold text-emerald-600">¥ ${Number(d.amount).toLocaleString('zh-CN')}</td>
-            <td class="p-3 text-center pr-4 no-print">
-              <button onclick="deleteDeposit(${d.id})" class="text-xs text-rose-500 hover:text-rose-700 hover:underline">刪除</button>
-            </td>
-          </tr>
-        `).join('');
-      }
-    };
+  function openModal(id) { var el = $(id); el.classList.remove('hidden'); el.classList.add('flex'); }
+  function closeModal(id) { var el = $(id); el.classList.add('hidden'); el.classList.remove('flex'); }
 
-    // 同步儲存至雲端
-    async function saveStateToCloud() {
-      if (window.db) {
-        try {
-          const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-          const docRef = doc(window.db, 'artifacts', window.appId, 'public', 'data', 'tracker_state', 'main');
-          await setDoc(docRef, { deposits, cards }, { merge: true });
-        } catch (e) {
-          console.error("雲端同步發送失敗:", e);
+  var confirmResolver = null;
+  function askConfirm(title, msg, okText) {
+    $('confirm-title').textContent = title;
+    $('confirm-msg').textContent = msg;
+    $('confirm-ok').textContent = okText || '確認刪除';
+    openModal('modal-confirm');
+    return new Promise(function (resolve) { confirmResolver = resolve; });
+  }
+  function settleConfirm(v) {
+    closeModal('modal-confirm');
+    if (confirmResolver) { confirmResolver(v); confirmResolver = null; }
+  }
+
+  /* ============================================================
+     操作
+  ============================================================ */
+  function addDeposit(e) {
+    e.preventDefault();
+    var month = $('dep-month').value;
+    var amount = num($('dep-amount').value);
+    var checked = Array.prototype.slice.call(document.querySelectorAll('input[name="dep-member"]:checked')).map(function (c) { return c.value; });
+
+    if (!month) return toast('請選擇月份', 'error');
+    if (amount <= 0) return toast('金額必須大於 0', 'error');
+    if (!checked.length) return toast('請至少勾選一位繳費成員', 'error');
+
+    var now = Date.now();
+    checked.forEach(function (m) {
+      state.deposits.push({ id: uid('d'), month: month, member: m, amount: amount, updatedAt: now });
+    });
+    persist();
+    render();
+    toast('已記錄 ' + checked.length + ' 人入金 ' + money(amount * checked.length));
+    syncNow('add-deposit');
+  }
+
+  function addCard(e) {
+    e.preventDefault();
+    var name = $('buy-name').value.trim();
+    var price = num($('buy-price').value);
+    var fee = num($('buy-fee').value);
+    if (!name) return toast('請輸入卡牌名稱', 'error');
+    if (price <= 0) return toast('成交金額必須大於 0', 'error');
+
+    var id = uid('c');
+    state.cards.push({
+      id: id,
+      buyDate: $('buy-date').value || localDate(),
+      name: name,
+      costPrice: price,
+      fee: fee,
+      totalCost: price + fee,
+      note: $('buy-note').value,
+      status: 'ACTIVE',
+      imageUrl: '',
+      sellDate: null, sellPrice: null, sellFee: null, netReturn: null, profit: null,
+      updatedAt: Date.now()
+    });
+
+    var pending = pendingImage;
+    if (pending) { imgCache[id] = pending; trimImages(); }
+    pendingImage = null;
+
+    $('buy-name').value = '';
+    $('buy-price').value = '';
+    $('buy-fee').value = '0';
+    $('buy-image').value = '';
+    $('preview-box').classList.add('hidden');
+
+    persist();
+    render();
+    toast('已買入：' + money(price + fee));
+    syncNow('add-card');
+    if (pending) uploadImage(id, pending);
+  }
+
+  function openSell(id) {
+    var card = null;
+    for (var i = 0; i < state.cards.length; i++) if (state.cards[i].id === id) card = state.cards[i];
+    if (!card) return;
+    $('sell-id').value = card.id;
+    $('sell-card-name').textContent = card.name + '（總成本 ' + money(card.totalCost) + '）';
+    $('sell-date').value = localDate();
+    $('sell-price').value = '';
+    $('sell-fee').value = '0';
+    openModal('modal-sell');
+  }
+
+  function confirmSell(e) {
+    e.preventDefault();
+    var id = $('sell-id').value;
+    var price = num($('sell-price').value);
+    var fee = num($('sell-fee').value);
+    if (price <= 0) return toast('請輸入賣出總價', 'error');
+
+    var card = null;
+    for (var i = 0; i < state.cards.length; i++) if (state.cards[i].id === id) card = state.cards[i];
+    if (!card) return;
+
+    var net = price - fee;
+    card.status = 'SOLD';
+    card.sellDate = $('sell-date').value || localDate();
+    card.sellPrice = price;
+    card.sellFee = fee;
+    card.netReturn = net;
+    card.profit = net - num(card.totalCost);
+    card.updatedAt = Date.now();
+
+    closeModal('modal-sell');
+    persist();
+    render();
+    toast('已入帳，資金池增加 ' + money(net));
+    syncNow('sell');
+  }
+
+  function openDividend(id) {
+    var card = null;
+    for (var i = 0; i < state.cards.length; i++) if (state.cards[i].id === id) card = state.cards[i];
+    if (!card) return;
+
+    var d = computeAll();
+    var profit = num(card.profit);
+    var rows = d.members.map(function (m) {
+      var amt = d.byMember[m] || 0;
+      var pct = d.totalDeposit > 0 ? (amt / d.totalDeposit) * 100 : 0;
+      var share = profit * pct / 100;
+      return '<tr class="border-b border-slate-100">' +
+        '<td class="py-2 font-medium text-slate-800">' + esc(m) + '</td>' +
+        '<td class="py-2 text-right num text-slate-500">' + money0(amt) + '</td>' +
+        '<td class="py-2 text-right num text-indigo-600 font-semibold">' + pct.toFixed(2) + '%</td>' +
+        '<td class="py-2 text-right num font-bold ' + (share >= 0 ? 'text-emerald-600' : 'text-rose-600') + '">' + money(share) + '</td>' +
+      '</tr>';
+    }).join('');
+
+    $('dividend-body').innerHTML =
+      '<div class="bg-slate-50 rounded-lg p-3 space-y-1">' +
+        '<div class="font-semibold text-slate-900">' + esc(card.name) + '</div>' +
+        '<div class="grid grid-cols-3 gap-2 text-xs pt-1">' +
+          '<div><div class="text-slate-400">買入成本</div><div class="font-semibold num">' + money(card.totalCost) + '</div></div>' +
+          '<div><div class="text-slate-400">賣出淨回款</div><div class="font-semibold num">' + money(card.netReturn) + '</div></div>' +
+          '<div><div class="text-slate-400">本次盈虧</div><div class="font-bold num ' + (profit >= 0 ? 'text-emerald-600' : 'text-rose-600') + '">' + money(profit) + '</div></div>' +
+        '</div>' +
+      '</div>' +
+      '<table class="w-full text-sm"><thead><tr class="text-xs text-slate-400 border-b border-slate-200">' +
+        '<th class="text-left py-2 font-semibold">成員</th><th class="text-right py-2 font-semibold">累計出資</th>' +
+        '<th class="text-right py-2 font-semibold">份額</th><th class="text-right py-2 font-semibold">可分紅</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<p class="text-[11px] text-slate-400 leading-relaxed">分紅公式：本次盈虧 × 個人份額%。賣出回款會先回到資金池，如要實際派錢，按上表金額轉帳即可。</p>';
+
+    openModal('modal-dividend');
+  }
+
+  function deleteCard(id) {
+    var card = null;
+    for (var i = 0; i < state.cards.length; i++) if (state.cards[i].id === id) card = state.cards[i];
+    if (!card) return;
+    askConfirm('剷除卡牌紀錄', '確定要刪除「' + card.name + '」？\n刪除後所有裝置都會同步移除，無法復原。', '確認剷除')
+      .then(function (ok) {
+        if (!ok) return;
+        card.deleted = true;
+        card.updatedAt = Date.now();
+        delete imgCache[id];
+        persist();
+        render();
+        toast('已剷除卡牌紀錄');
+        syncNow('del-card');
+      });
+  }
+
+  function deleteDeposit(id) {
+    var dep = null;
+    for (var i = 0; i < state.deposits.length; i++) if (state.deposits[i].id === id) dep = state.deposits[i];
+    if (!dep) return;
+    askConfirm('刪除入金紀錄', dep.member + ' • ' + dep.month + ' • ' + money(dep.amount) + '\n確定刪除？', '確認刪除')
+      .then(function (ok) {
+        if (!ok) return;
+        dep.deleted = true;
+        dep.updatedAt = Date.now();
+        persist();
+        render();
+        toast('已刪除入金紀錄');
+        syncNow('del-dep');
+      });
+  }
+
+  /* ============================================================
+     相片
+  ============================================================ */
+  function handleImagePick(e) {
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      var img = new Image();
+      img.onload = function () {
+        var MAX = 520;
+        var w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          var ratio = Math.min(MAX / w, MAX / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
         }
-      }
-    }
-
-    // 提交入金
-    function addDeposit(e) {
-      e.preventDefault();
-      const monthInput = document.getElementById("dep-month").value;
-      const amount = Number(document.getElementById("dep-amount").value);
-      const checkedMembers = Array.from(document.querySelectorAll('input[name="dep-members"]:checked')).map(cb => cb.value);
-
-      if (checkedMembers.length === 0) {
-        alert("請至少選擇一位繳費成員！");
-        return;
-      }
-
-      checkedMembers.forEach(m => {
-        deposits.push({
-          id: Date.now() + Math.random(),
-          month: `${monthInput} (1號)`,
-          member: m,
-          amount: amount
-        });
-      });
-
-      saveStateToCloud();
-      render();
-    }
-
-    // 刪除入金紀錄
-    function deleteDeposit(id) {
-      deposits = deposits.filter(d => d.id !== id);
-      saveStateToCloud();
-      render();
-    }
-
-    // 提交買卡
-    function addCardBuy(e) {
-      e.preventDefault();
-      const buyDate = document.getElementById("buy-date").value;
-      const name = document.getElementById("buy-name").value;
-      const price = Number(document.getElementById("buy-price").value);
-      const fee = Number(document.getElementById("buy-fee").value);
-      const note = document.getElementById("buy-note").value;
-
-      const totalCost = price + fee;
-
-      cards.push({
-        id: Date.now(),
-        buyDate,
-        name,
-        imageData: currentImageBase64,
-        costPrice: price,
-        fee,
-        totalCost,
-        note,
-        status: "ACTIVE",
-        sellDate: null,
-        sellPrice: null,
-        sellFee: null,
-        netReturn: null,
-        profit: null
-      });
-
-      // 重設表單
-      document.getElementById("buy-name").value = "";
-      document.getElementById("buy-price").value = "";
-      document.getElementById("buy-fee").value = "0";
-      document.getElementById("buy-image").value = "";
-      document.getElementById("image-preview-container").classList.add("hidden");
-      currentImageBase64 = null;
-
-      saveStateToCloud();
-      render();
-    }
-
-    // 打開賣出彈窗
-    function openSellModal(id) {
-      const card = cards.find(c => c.id === id);
-      if (!card) return;
-
-      document.getElementById("sell-card-id").value = card.id;
-      document.getElementById("sell-card-name-display").innerText = `${card.name} (總成本: ¥${card.totalCost})`;
-      document.getElementById("sell-date").valueAsDate = new Date();
-      document.getElementById("sell-modal").classList.remove("hidden");
-    }
-
-    function closeSellModal() {
-      document.getElementById("sell-modal").classList.add("hidden");
-    }
-
-    // 確認賣出
-    function confirmSell(e) {
-      e.preventDefault();
-      const id = Number(document.getElementById("sell-card-id").value);
-      const sellDate = document.getElementById("sell-date").value;
-      const sellPrice = Number(document.getElementById("sell-price").value);
-      const sellFee = Number(document.getElementById("sell-fee").value);
-
-      const netReturn = sellPrice - sellFee;
-
-      const cardIndex = cards.findIndex(c => c.id === id);
-      if (cardIndex !== -1) {
-        cards[cardIndex].status = "SOLD";
-        cards[cardIndex].sellDate = sellDate;
-        cards[cardIndex].sellPrice = sellPrice;
-        cards[cardIndex].sellFee = sellFee;
-        cards[cardIndex].netReturn = netReturn;
-        cards[cardIndex].profit = netReturn - cards[cardIndex].totalCost;
-      }
-
-      closeSellModal();
-      saveStateToCloud();
-      render();
-    }
-
-    // 刪除卡牌紀錄 (剷除功能)
-    function deleteCard(id) {
-      cards = cards.filter(c => c.id !== id);
-      saveStateToCloud();
-      render();
-    }
-
-    // 匯出 CSV 檔 (支援 Excel 打開)
-    function exportToCSV() {
-      let csvContent = "\uFEFF"; // UTF-8 BOM
-      csvContent += "類別,日期/月份,名稱/成員,金額/總成本,狀態,淨回款,盈虧,備註\n";
-
-      deposits.forEach(d => {
-        csvContent += `會費入金,${d.month},${d.member},${d.amount},已入帳,-,-,-\n`;
-      });
-
-      cards.forEach(c => {
-        csvContent += `買賣卡牌,${c.buyDate},"${c.name}",${c.totalCost},${c.status === 'SOLD' ? '已賣出' : '持有中'},${c.netReturn || '-'},${c.profit || '-'},"${c.note}"\n`;
-      });
-
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `卡牌合夥資金池帳目表_${new Date().toISOString().slice(0,10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-
-    // 頁面加載完成後自動初始化
-    window.onload = function() {
-      render();
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        pendingImage = canvas.toDataURL('image/jpeg', 0.62);
+        $('preview-img').src = pendingImage;
+        $('preview-box').classList.remove('hidden');
+      };
+      img.onerror = function () { toast('相片讀取失敗', 'error'); };
+      img.src = ev.target.result;
     };
-  </script>
+    reader.readAsDataURL(file);
+  }
+
+  function openImage(id) {
+    var card = null;
+    for (var i = 0; i < state.cards.length; i++) if (state.cards[i].id === id) card = state.cards[i];
+    if (!card) return;
+    var src = card.imageUrl || imgCache[id];
+    if (!src) return;
+    $('modal-image-img').src = src;
+    $('modal-image-cap').textContent = card.name;
+    openModal('modal-image');
+  }
+
+  /* ============================================================
+     匯出
+  ============================================================ */
+  function download(filename, content, mime) {
+    var blob = new Blob([content], { type: mime || 'text/plain;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function csvCell(v) {
+    var s = String(v == null ? '' : v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function exportCSV() {
+    var d = computeAll();
+    var csv = '\uFEFF';
+    csv += '類別,日期／月份,名稱／成員,金額／總成本,狀態,淨回款,盈虧,份額%,備註\n';
+    d.deposits.forEach(function (x) {
+      var pct = d.totalDeposit > 0 ? (num(x.amount) / d.totalDeposit) * 100 : 0;
+      csv += ['會費入金', x.month, x.member, num(x.amount), '已入帳', '', '', pct.toFixed(2), ''].map(csvCell).join(',') + '\n';
+    });
+    d.cards.forEach(function (c) {
+      csv += ['買賣卡牌', c.buyDate, c.name, num(c.totalCost), c.status === 'SOLD' ? '已賣出' : '持有中',
+        c.status === 'SOLD' ? num(c.netReturn) : '', c.status === 'SOLD' ? num(c.profit) : '', '', c.note || ''].map(csvCell).join(',') + '\n';
+    });
+    download('卡牌資金池_' + localDate() + '.csv', csv, 'text/csv;charset=utf-8;');
+    toast('已匯出 CSV');
+  }
+
+  /* ============================================================
+     設定 / 連接
+  ============================================================ */
+  function readHashConfig() {
+    var src = (location.hash || '') + (location.search || '');
+    var m = /[#&?]db=([^&#]+)/.exec(src);
+    if (!m) return false;
+    var url = '';
+    try { url = decodeURIComponent(m[1]); } catch (e) { return false; }
+    if (!/^https?:\/\//.test(url)) return false;
+    cfg.url = url;
+    saveCfg();
+    try { history.replaceState(null, '', location.pathname); } catch (e) { }
+    return true;
+  }
+
+  function connect(url, silent) {
+    url = String(url || '').trim();
+    if (!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec/.test(url)) {
+      toast('網址格式唔啱，應該係 script.google.com/macros/s/.../exec', 'error');
+      return false;
+    }
+    cfg.url = url;
+    saveCfg();
+    syncNow('connect').then(function () {
+      if (syncStatus === 'ok') { if (!silent) toast('已連接雲端，開始同步'); }
+      else if (!silent) toast('連接失敗：' + (lastSyncError || '請檢查網址'), 'error');
+    });
+    return true;
+  }
+
+  /* ============================================================
+     初始化
+  ============================================================ */
+  function boot() {
+    try { cfg = Object.assign({ url: '', clientId: '' }, JSON.parse(localStorage.getItem(K_CFG) || '{}')); }
+    catch (e) { cfg = { url: '', clientId: '' }; }
+    if (!cfg.clientId) { cfg.clientId = uid('dev'); saveCfg(); }
+
+    try { imgCache = JSON.parse(localStorage.getItem(K_IMG) || '{}') || {}; } catch (e) { imgCache = {}; }
+
+    readHashConfig();
+    state = loadInitialState();
+
+    var now = new Date();
+    $('dep-month').value = now.getFullYear() + '-' + pad(now.getMonth() + 1);
+    $('buy-date').value = localDate();
+
+    $('dep-members').innerHTML = BASE_MEMBERS.map(function (m) {
+      return '<label class="flex items-center gap-2 text-sm border border-slate-200 rounded-lg px-3 py-2 hover:bg-slate-50 cursor-pointer">' +
+        '<input type="checkbox" name="dep-member" value="' + esc(m) + '" checked class="rounded text-indigo-600 focus:ring-indigo-500">' +
+        '<span>' + esc(m) + '</span></label>';
+    }).join('');
+
+    $('cfg-device').textContent = cfg.clientId;
+    $('cfg-url').value = cfg.url || '';
+
+    bind();
+    render();
+    if (cfg.url) syncNow('boot');
+    schedulePoll();
+  }
+
+  function bind() {
+    $('tab-deposit').addEventListener('click', function () {
+      $('form-deposit').classList.remove('hidden');
+      $('form-card').classList.add('hidden');
+      $('tab-deposit').className = 'flex-1 py-3.5 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600';
+      $('tab-card').className = 'flex-1 py-3.5 text-sm font-semibold border-b-2 border-transparent text-slate-500';
+    });
+    $('tab-card').addEventListener('click', function () {
+      $('form-card').classList.remove('hidden');
+      $('form-deposit').classList.add('hidden');
+      $('tab-card').className = 'flex-1 py-3.5 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600';
+      $('tab-deposit').className = 'flex-1 py-3.5 text-sm font-semibold border-b-2 border-transparent text-slate-500';
+    });
+
+    $('form-deposit').addEventListener('submit', addDeposit);
+    $('form-card').addEventListener('submit', addCard);
+    $('form-sell').addEventListener('submit', confirmSell);
+    $('buy-image').addEventListener('change', handleImagePick);
+
+    $('btn-sync').addEventListener('click', function () {
+      if (!cfg.url) { openModal('modal-settings'); return; }
+      syncNow('manual').then(function () {
+        toast(syncStatus === 'ok' ? '同步完成' : '同步失敗：' + (lastSyncError || ''), syncStatus === 'ok' ? '' : 'error');
+      });
+    });
+    $('btn-export').addEventListener('click', exportCSV);
+    $('btn-print').addEventListener('click', function () { window.print(); });
+    $('btn-settings').addEventListener('click', function () {
+      $('cfg-url').value = cfg.url || '';
+      openModal('modal-settings');
+    });
+
+    $('cfg-save').addEventListener('click', function () {
+      if (connect($('cfg-url').value)) closeModal('modal-settings');
+    });
+    $('cfg-test').addEventListener('click', function () {
+      var url = $('cfg-url').value.trim();
+      if (!url) return toast('請先貼上網址', 'error');
+      toast('測試中…');
+      fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'get' }) })
+        .then(function (r) { return r.text(); })
+        .then(function (t) {
+          var d = JSON.parse(t);
+          toast(d.ok ? '✅ 連線正常' : '❌ ' + (d.error || '未知錯誤'), d.ok ? '' : 'error');
+        })
+        .catch(function (e) { toast('❌ 連線失敗：' + e.message, 'error'); });
+    });
+    $('cfg-backup').addEventListener('click', function () {
+      download('資金池備份_' + localDate() + '.json', JSON.stringify({ exportedAt: new Date().toISOString(), state: state }, null, 2), 'application/json');
+    });
+    $('cfg-clear').addEventListener('click', function () {
+      askConfirm('清除本機資料', '只會清除呢部裝置嘅快取，雲端資料唔會受影響。下次同步會重新下載。', '確認清除')
+        .then(function (ok) {
+          if (!ok) return;
+          localStorage.removeItem(K_STATE);
+          localStorage.removeItem(K_IMG);
+          state = { deposits: [], cards: [] };
+          imgCache = {};
+          render();
+          closeModal('modal-settings');
+          toast('已清除本機資料');
+          syncNow('clear');
+        });
+    });
+
+    $('confirm-ok').addEventListener('click', function () { settleConfirm(true); });
+    $('confirm-cancel').addEventListener('click', function () { settleConfirm(false); });
+
+    document.addEventListener('click', function (e) {
+      if (!e.target || !e.target.closest) return;
+      var closer = e.target.closest('[data-close]');
+      if (closer) { closeModal(closer.getAttribute('data-close')); return; }
+      var btn = e.target.closest('[data-act]');
+      if (!btn) return;
+      var act = btn.getAttribute('data-act');
+      var id = btn.getAttribute('data-id');
+      if (act === 'sell') openSell(id);
+      else if (act === 'del-card') deleteCard(id);
+      else if (act === 'del-dep') deleteDeposit(id);
+      else if (act === 'dividend') openDividend(id);
+      else if (act === 'img') openImage(id);
+    });
+
+    document.addEventListener('visibilitychange', function () {
+      schedulePoll();
+      if (!document.hidden) syncNow('visible');
+    });
+    window.addEventListener('online', function () { syncNow('online'); });
+    window.addEventListener('focus', function () {
+      if (Date.now() - lastSyncAt > 3000) syncNow('focus');
+    });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+</script>
 </body>
 </html>
